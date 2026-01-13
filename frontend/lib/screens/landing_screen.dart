@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:web/web.dart' as web;
 import '../widgets/app_nav_drawer.dart';
-import 'dart:html' as html;
 import 'dart:ui' as ui; // ignore: library_prefixes
 import 'dart:ui_web' as ui_web;
 
@@ -22,15 +21,21 @@ class _LandingScreenState extends State<LandingScreen> {
     super.initState();
     // Register YouTube view factory for Web
     // ignore: undefined_prefixed_name
-    ui_web.platformViewRegistry.registerViewFactory(
-      'youtube-video',
-      (int viewId) => html.IFrameElement()
-        ..src = 'https://www.youtube.com/embed/L8NvFc-F5EU?si=Xu21FymPx2G17ppY'
-        ..style.border = 'none'
-        ..allow =
-            'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
-        ..allowFullscreen = true,
-    );
+    ui_web.platformViewRegistry.registerViewFactory('youtube-video', (
+      int viewId,
+    ) {
+      final iframe =
+          web.document.createElement('iframe') as web.HTMLIFrameElement;
+      iframe.src =
+          'https://www.youtube.com/embed/L8NvFc-F5EU?si=Xu21FymPx2G17ppY';
+      iframe.style.border = 'none';
+      iframe.setAttribute(
+        'allow',
+        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+      );
+      iframe.setAttribute('allowfullscreen', 'true');
+      return iframe;
+    });
   }
 
   void _scrollToFAQ() {

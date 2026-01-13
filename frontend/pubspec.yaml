@@ -43,6 +43,7 @@ dependencies:
   universal_html: ^2.3.0
   web: ^1.1.1
   flutter_svg: ^2.2.3
+  file_picker: ^8.1.6
 
 dev_dependencies:
   flutter_test:

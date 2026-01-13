@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'dart:async'; // For Timer
 import 'package:web/web.dart' as web;
 import '../services/api_service.dart';
-import 'dart:html' as html; // For file upload
+import 'package:file_picker/file_picker.dart';
 import '../widgets/app_nav_drawer.dart';
 import '../widgets/admin_widgets.dart';
 
@@ -157,44 +156,39 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _uploadRoster() async {
-    // Web file picker
-    final html.FileUploadInputElement uploadInput =
-        html.FileUploadInputElement();
-    uploadInput.accept = '.csv';
-    uploadInput.click();
+    try {
+      // Modern file picker (replaces dart:html)
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true, // Critical for web - gets bytes
+      );
 
-    uploadInput.onChange.listen((e) async {
-      final files = uploadInput.files;
-      if (files!.isNotEmpty) {
-        final file = files[0];
-        final reader = html.FileReader();
-        reader.readAsArrayBuffer(file);
-        reader.onLoadEnd.listen((e) async {
-          try {
-            final bytes = reader.result as List<int>;
-            final count = await _api.uploadRoster(bytes, file.name);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Uploaded $count students!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-              _loadData();
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Upload failed: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        });
+      if (result != null && result.files.first.bytes != null) {
+        final bytes = result.files.first.bytes!;
+        final name = result.files.first.name;
+
+        final count = await _api.uploadRoster(bytes, name);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Uploaded $count students!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _loadData();
+        }
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _clearRoster() async {
