@@ -245,26 +245,31 @@ def api_scan():
     if is_student_banned(code, user_id=user_id):
         return jsonify(ok=False, action="banned", message="RESTROOM PRIVILEGES SUSPENDED - SEE TEACHER", name=student_name), 403
 
+    # QUEUE SELF-REMOVAL LOGIC (NEW FEATURE)
+    # Allow students to remove themselves from queue by scanning again
+    existing_queue_entry = Queue.query.filter_by(user_id=user_id, student_id=code).first()
+    if existing_queue_entry:
+        db.session.delete(existing_queue_entry)
+        db.session.commit()
+        return jsonify(ok=True, action="left_queue", message="Removed from waitlist", name=student_name)
+
     # QUEUE LOCK LOGIC
     queue_count = Queue.query.filter_by(user_id=user_id).count()
     if queue_count > 0:
         top_spot = Queue.query.filter_by(user_id=user_id).order_by(Queue.joined_ts.asc()).first()
         if top_spot.student_id != code:
-             # Scanner is NOT the top spot
-             if Queue.query.filter_by(user_id=user_id, student_id=code).first():
-                 return jsonify(ok=False, action="denied_queue_position", message="You are in the waitlist. Please wait for your turn (Queue Lock)."), 409
+             # Scanner is NOT the top spot - new student trying to join
+             if settings.get("enable_queue"):
+                 q = Queue(student_id=code, user_id=user_id)
+                 db.session.add(q)
+                 db.session.commit()
+                 return jsonify(ok=True, action="queued", message="Added to Waitlist (Queue is active)")
              else:
-                 # New student trying to cut in line
-                 if settings.get("enable_queue"):
-                     q = Queue(student_id=code, user_id=user_id)
-                     db.session.add(q)
-                     db.session.commit()
-                     return jsonify(ok=True, action="queued", message="Added to Waitlist (Queue is active)")
-                 else:
-                     return jsonify(ok=False, action="denied", message="Waitlist is active. Cannot start."), 409
+                 return jsonify(ok=False, action="denied", message="Waitlist is active. Cannot start."), 409
         else:
             # Scanner IS the top spot. Allow and REMOVE from queue.
             db.session.delete(top_spot)
+
 
     # CAPACITY CHECK & START
     if len(open_sessions) >= settings["capacity"]:

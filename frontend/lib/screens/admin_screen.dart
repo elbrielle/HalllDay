@@ -339,15 +339,17 @@ class _AdminScreenState extends State<AdminScreen> {
       try {
         await _api.endSession(id);
         _loadData();
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Session ended.')));
+        }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       }
     }
   }
@@ -375,15 +377,17 @@ class _AdminScreenState extends State<AdminScreen> {
       try {
         await _api.deleteFromQueue(studentId, ""); // Token not needed for admin
         _loadData();
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Removed from waitlist.')),
           );
+        }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       }
     }
   }
@@ -414,15 +418,17 @@ class _AdminScreenState extends State<AdminScreen> {
       try {
         await _api.banStudent(studentId);
         _loadData();
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Student banned.')));
+        }
       } catch (e) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       }
     }
   }
@@ -721,12 +727,13 @@ class _AdminScreenState extends State<AdminScreen> {
                                 try {
                                   await _api.reorderQueue(ids);
                                 } catch (e) {
-                                  if (mounted)
+                                  if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('Reorder failed: $e'),
                                       ),
                                     );
+                                  }
                                   _loadData(); // Revert on failure
                                 }
                               },
