@@ -5,6 +5,7 @@ import 'package:web/web.dart' as web;
 import '../services/api_service.dart';
 import 'dart:html' as html; // For file upload
 import '../widgets/app_nav_drawer.dart';
+import '../widgets/admin_widgets.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -547,12 +548,12 @@ class _AdminScreenState extends State<AdminScreen> {
                 // Quick Stats & Suspend
                 Row(
                   children: [
-                    _StatsChip(
+                    StatsChip(
                       "Open Sessions",
                       stats['active_sessions_count'].toString(),
                     ),
                     const SizedBox(width: 12),
-                    _StatsChip(
+                    StatsChip(
                       "Total Sessions",
                       stats['total_sessions'].toString(),
                     ),
@@ -575,7 +576,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // LIVE ACTIVITY (Active Sessions & Waitlist)
-                const _SectionHeader(
+                const SectionHeader(
                   icon: Icons.access_time_filled,
                   title: "Live Activity",
                 ),
@@ -810,7 +811,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
 
                 // Share Section
-                const _SectionHeader(
+                const SectionHeader(
                   icon: Icons.share,
                   title: "Share Your Kiosk",
                 ),
@@ -825,11 +826,11 @@ class _AdminScreenState extends State<AdminScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: _CopyField("Kiosk URL", urls['kiosk'] ?? ''),
+                            child: CopyField("Kiosk URL", urls['kiosk'] ?? ''),
                           ),
                           const SizedBox(width: 24),
                           Expanded(
-                            child: _CopyField(
+                            child: CopyField(
                               "Display URL",
                               urls['display'] ?? '',
                             ),
@@ -863,7 +864,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Customize URL
-                const _SectionHeader(title: "Customize URL"),
+                const SectionHeader(title: "Customize URL"),
                 Row(
                   children: [
                     Expanded(
@@ -891,7 +892,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Roster Management
-                _SectionHeader(
+                SectionHeader(
                   title: "Roster Management",
                   color: Colors.green[800],
                 ),
@@ -945,7 +946,7 @@ class _AdminScreenState extends State<AdminScreen> {
                           OutlinedButton.icon(
                             onPressed: () => showDialog(
                               context: context,
-                              builder: (c) => _RosterManager(api: _api),
+                              builder: (c) => RosterManager(api: _api),
                             ),
                             icon: const Icon(Icons.list),
                             label: const Text("Manage Bans & View List"),
@@ -959,14 +960,14 @@ class _AdminScreenState extends State<AdminScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: _StatsCard(
+                            child: StatsCard(
                               "${stats['roster_count']}",
                               "Database Roster (Encrypted)",
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: _StatsCard(
+                            child: StatsCard(
                               "${stats['memory_roster_count']}",
                               "Display Cache",
                             ),
@@ -1003,7 +1004,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Settings
-                const _SectionHeader(title: "Settings"),
+                const SectionHeader(title: "Settings"),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -1118,7 +1119,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Insights
-                const _SectionHeader(title: "Weekly Insights"),
+                const SectionHeader(title: "Weekly Insights"),
                 const Text(
                   '"Anonymous" entries appear when IDs are scanned without a roster.',
                   style: TextStyle(color: Colors.grey),
@@ -1129,14 +1130,14 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _InsightCard(
+                        child: InsightCard(
                           "Top Users",
                           insights['top_students'] ?? [],
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: _InsightCard(
+                        child: InsightCard(
                           "Most Overdue",
                           insights['most_overdue'] ?? [],
                           isRed: true,
@@ -1150,7 +1151,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: TextButton.icon(
                     onPressed: () => showDialog(
                       context: context,
-                      builder: (c) => _PassLogsDialog(api: _api),
+                      builder: (c) => PassLogsDialog(api: _api),
                     ),
                     icon: const Icon(Icons.history),
                     label: const Text("View Full Pass Logs"),
@@ -1160,7 +1161,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 const SizedBox(height: 32),
-                const _SectionHeader(
+                const SectionHeader(
                   title: "System Status",
                   icon: Icons.monitor_heart,
                 ),
@@ -1208,7 +1209,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
 
                 const SizedBox(height: 32),
-                const _SectionHeader(title: "System Controls"),
+                const SectionHeader(title: "System Controls"),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -1254,480 +1255,6 @@ class _AdminScreenState extends State<AdminScreen> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final IconData? icon;
-  final Color? color;
-  const _SectionHeader({required this.title, this.icon, this.color});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          if (icon != null) ...[
-            Icon(icon, color: color ?? Colors.green[800]),
-            const SizedBox(width: 8),
-          ],
-          Text(
-            title,
-            style: TextStyle(fontSize: 24, color: color ?? Colors.green[800]),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsChip extends StatelessWidget {
-  final String label;
-  final String value;
-  const _StatsChip(this.label, this.value);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2ECE4),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Text("$label:", style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 4),
-          Text(value),
-        ],
-      ),
-    );
-  }
-}
-
-class _CopyField extends StatelessWidget {
-  final String label;
-  final String value;
-  const _CopyField(this.label, this.value);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.monitor, size: 16),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(color: Colors.grey),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Copied!')));
-            },
-            icon: const Icon(Icons.copy, size: 16),
-            label: const Text("Copy"),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFF2F2F2),
-              foregroundColor: Colors.black,
-              elevation: 0,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsCard extends StatelessWidget {
-  final String value;
-  final String label;
-  const _StatsCard(this.value, this.label);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: TextStyle(fontSize: 32, color: Colors.green[800])),
-          Text(label, style: const TextStyle(color: Colors.black)),
-        ],
-      ),
-    );
-  }
-}
-
-class _InsightCard extends StatelessWidget {
-  final String title;
-  final List<dynamic> items;
-  final bool isRed;
-  const _InsightCard(this.title, this.items, {this.isRed = false});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2ECE4),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (ctx, i) {
-                final item = items[i];
-                final maxVal = (items.isNotEmpty)
-                    ? items[0]['count'] as int
-                    : 1;
-                final val = item['count'] as int;
-                final pct = val / maxVal;
-
-                return Row(
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      child: Text(
-                        item['name'],
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Container(height: 12, color: Colors.grey[300]),
-                          FractionallySizedBox(
-                            widthFactor: pct,
-                            child: Container(
-                              height: 12,
-                              color: isRed ? Colors.red : Colors.green[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text("$val", style: const TextStyle(fontSize: 12)),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RosterManager extends StatefulWidget {
-  final ApiService api;
-  const _RosterManager({required this.api});
-
-  @override
-  State<_RosterManager> createState() => _RosterManagerState();
-}
-
-class _RosterManagerState extends State<_RosterManager> {
-  bool _loading = true;
-  List<Map<String, dynamic>> _roster = [];
-  List<Map<String, dynamic>> _filtered = [];
-  final TextEditingController _searchCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final data = await widget.api.fetchRoster();
-      setState(() {
-        _roster = data;
-        _filtered = data;
-        _loading = false;
-      });
-      _filter();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  void _filter() {
-    final q = _searchCtrl.text.toLowerCase();
-    setState(() {
-      _filtered = _roster.where((s) {
-        final name = (s['name'] ?? '').toString().toLowerCase();
-        final id = (s['student_id'] ?? '').toString().toLowerCase();
-        return name.contains(q) || id.contains(q);
-      }).toList();
-    });
-  }
-
-  Future<void> _toggleBan(int index, bool val) async {
-    final s = _filtered[index];
-    // Optimistic
-    setState(() {
-      s['banned'] = val;
-    });
-
-    try {
-      await widget.api.toggleBan(s['name_hash'], val);
-    } catch (e) {
-      // Revert
-      setState(() {
-        s['banned'] = !val;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 600,
-        height: 700,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  "Manage Roster & Bans",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _searchCtrl,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: "Search by Name or ID...",
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (_) => _filter(),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _filtered.isEmpty
-                  ? const Center(child: Text("No students found."))
-                  : ListView.separated(
-                      itemCount: _filtered.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (ctx, i) {
-                        final s = _filtered[i];
-                        final id = s['student_id'] ?? 'Hidden';
-                        final isBanned = s['banned'] == true;
-
-                        return ListTile(
-                          title: Text(s['name'] ?? 'Unknown'),
-                          subtitle: Text("ID: $id"),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                isBanned ? "BANNED" : "Active",
-                                style: TextStyle(
-                                  color: isBanned ? Colors.red : Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Switch(
-                                value: isBanned,
-                                activeThumbColor: Colors.red,
-                                onChanged: (v) => _toggleBan(i, v),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PassLogsDialog extends StatefulWidget {
-  final ApiService api;
-  const _PassLogsDialog({required this.api});
-
-  @override
-  State<_PassLogsDialog> createState() => _PassLogsDialogState();
-}
-
-class _PassLogsDialogState extends State<_PassLogsDialog> {
-  bool _loading = true;
-  List<Map<String, dynamic>> _logs = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final data = await widget.api.getPassLogs();
-      if (mounted) {
-        setState(() {
-          _logs = data;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 800,
-        height: 700,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Text(
-                  "Recent Pass Activity",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    web.window.open('/api/admin/logs/export', '_blank');
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text("Export CSV"),
-                ),
-                const SizedBox(width: 16),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _logs.isEmpty
-                  ? const Center(child: Text("No logs found."))
-                  : SingleChildScrollView(
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text("Student")),
-                          DataColumn(label: Text("Start Time")),
-                          DataColumn(label: Text("Duration")),
-                          DataColumn(label: Text("Status")),
-                        ],
-                        rows: _logs.map((log) {
-                          final status = log['status'] ?? 'active';
-                          final isOverdue = status == 'overdue';
-                          final isEnded = status == 'completed';
-
-                          Color color = Colors.black;
-                          if (isOverdue) {
-                            color = Colors.red;
-                          } else if (!isEnded)
-                            color = Colors.green[800]!;
-
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                Text(
-                                  log['name'] ?? 'Unknown',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Text(
-                                  log['start']?.split('T')[1].split('.')[0] ??
-                                      '',
-                                ),
-                              ),
-                              DataCell(Text("${log['duration_minutes']} min")),
-                              DataCell(
-                                Text(
-                                  status.toUpperCase(),
-                                  style: TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-            ),
-          ],
         ),
       ),
     );
