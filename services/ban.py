@@ -32,7 +32,8 @@ class BanService:
     def set_student_banned(self, user_id: Optional[int], student_id: str, banned_status: bool) -> bool:
         """Ban or unban a student from using the restroom"""
         try:
-            from datetime import datetime, timezone
+            # TEMPORARILY DISABLED - needs proper migration
+            # from datetime import datetime, timezone
             name_hash = self.roster_service._hash_student_id(student_id, user_id)
             
             # Build query with optional user_id scoping
@@ -43,11 +44,11 @@ class BanService:
             student_name = query.first()
             if student_name:
                 student_name.banned = banned_status
-                # Set timestamp when banning, clear when unbanning
-                if banned_status:
-                    student_name.banned_since = datetime.now(timezone.utc)
-                else:
-                    student_name.banned_since = None
+                # TEMPORARILY DISABLED - needs proper migration
+                # if banned_status:
+                #     student_name.banned_since = datetime.now(timezone.utc)
+                # else:
+                #     student_name.banned_since = None
                 self.db.session.commit()
                 return True
             return False

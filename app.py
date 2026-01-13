@@ -119,12 +119,13 @@ class Settings(db.Model):
 class StudentName(db.Model):
     """FERPA-compliant storage of student names only (no ID association)"""
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name_hash = db.Column(db.String, nullable=False)  # Hash of student_id for lookup (removed unique,see constraint below)
+    name_hash = db.Column(db.String, nullable=False)  # Hash of student_id for lookup (removed unique, see constraint below)
     encrypted_id = db.Column(db.String, nullable=True)   # Encrypted ID for admin retrieval
     display_name = db.Column(db.String, nullable=False)  # Actual name to display
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     banned = db.Column(db.Boolean, nullable=False, default=False)  # Restroom ban flag
-    banned_since = db.Column(db.DateTime(timezone=True), nullable=True)  # Timestamp when ban started (for duration tracking)
+    # TEMPORARILY DISABLED - needs proper migration
+    # banned_since = db.Column(db.DateTime(timezone=True), nullable=True)  
     # 2.0: Add user_id FK (nullable for migration compatibility)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     
