@@ -330,10 +330,29 @@ class _RosterManagerState extends State<RosterManager> {
                         final s = _filtered[i];
                         final id = s['student_id'] ?? 'Hidden';
                         final isBanned = s['banned'] == true;
+                        final banDays = s['ban_days'];
+
+                        // Build subtitle with ID and ban duration
+                        String subtitle = "ID: $id";
+                        if (isBanned && banDays != null) {
+                          subtitle +=
+                              ' • Banned: $banDays ${banDays == 1 ? 'day' : 'days'}';
+                        }
 
                         return ListTile(
-                          title: Text(s['name'] ?? 'Unknown'),
-                          subtitle: Text("ID: $id"),
+                          title: Text(
+                            s['name'] ?? 'Unknown',
+                            style: TextStyle(
+                              color: isBanned ? Colors.red : null,
+                              fontWeight: isBanned ? FontWeight.bold : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: isBanned ? Colors.red.shade700 : null,
+                            ),
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

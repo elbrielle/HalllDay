@@ -421,6 +421,7 @@ def api_roster_upload():
 def api_roster_get():
     """Get roster list"""
     from app import is_admin_authenticated, StudentName, cipher_suite
+    from datetime import datetime, timezone
     
     if not is_admin_authenticated():
         return jsonify(ok=False, error="Unauthorized"), 401
@@ -438,12 +439,19 @@ def api_roster_get():
                 except:
                     readable_id = "Error"
             
+            # Calculate ban duration
+            ban_days = None
+            if s.banned and s.banned_since:
+                delta = datetime.now(timezone.utc) - s.banned_since
+                ban_days = delta.days
+            
             roster.append({
                 "id": s.id,
                 "name": s.display_name,
                 "student_id": readable_id,
                 "banned": s.banned,
-                "name_hash": s.name_hash
+                "name_hash": s.name_hash,
+                "ban_days": ban_days  # Number of days banned (null if not banned or no timestamp)
             })
             
         return jsonify(ok=True, roster=roster)
