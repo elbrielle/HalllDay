@@ -536,13 +536,13 @@ def api_admin_logs():
             
             logs.append({
                 "id": s.id,
-                "student_name": name,
+                "name": name,  # Changed back from "student_name" to "name"
                 "student_id": s.student_id,
-                "room": s.room,
-                "start_ts": to_local(s.start_ts).isoformat(),
-                "end_ts": to_local(s.end_ts).isoformat() if s.end_ts else None,
+                "start": to_local(s.start_ts).isoformat(),  # Changed back from "start_ts" to "start"
+                "end": to_local(s.end_ts).isoformat() if s.end_ts else None,  # Changed back from "end_ts" to "end"
                 "duration_minutes": round(s.duration_seconds / 60, 1),
-                "status": status
+                "status": status,
+                "room": s.room
             })
             
         total_count = SessionModel.query.filter_by(user_id=user_id).count()
