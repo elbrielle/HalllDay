@@ -583,6 +583,10 @@ def require_admin_auth_api(f):
 # Register auth blueprint for Google OAuth (2.0)
 from auth import auth_bp, init_oauth
 app.register_blueprint(auth_bp)
+
+# Register admin routes blueprint
+from routes import register_blueprints
+register_blueprints(app)
 init_oauth(app)
 
 @app.route("/")

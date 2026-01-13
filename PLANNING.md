@@ -86,3 +86,62 @@
 **Status**: Completed (2025-12-07)
 - [x] **Multi-Tenancy**: Isolated user settings.
 - [x] **Security**: Roster encryption (Fernet).
+
+---
+
+# 🔧 Backend Refactoring (P4) - In Progress
+
+## Current Status: Foundation Laid, Route Migration Remaining
+
+### ✅ Completed This Session (2026-01-13)
+- Created `routes/` directory structure
+- Created `routes/__init__.py` for blueprint registration
+- Created `routes/admin.py` template with auth decorators
+- Created `routes/kiosk.py` placeholder
+- Verified `auth.py` already exists (OAuth separated)
+
+### 📊 Remaining Work
+**app.py**: 2897 lines, 36 total routes
+- ✅ Auth (4): Already in `auth.py`
+- 🏗️ Admin (14): Template created, needs migration
+- ❌ Kiosk (6): Placeholder only
+- ❌ Dev (4): Not started
+- ❌ Static (11): Not started
+
+---
+
+## 🚀 Next Steps: Phase 1 - Admin Routes Migration
+
+Extract these 14 routes from `app.py` to `routes/admin.py`:
+
+| Route | Line | Function | Dependencies |
+|-------|------|----------|--------------|
+| `/api/admin/stats` | 730 | `admin_stats_api()` | User, Settings, Session, SessionService |
+| `/api/settings/update` | 884 | `update_settings_api()` | Settings |
+| `/api/settings/suspend` | 931 | `api_suspend_kiosk()` | Settings |
+| `/api/settings/slug` | 949 | `api_update_slug()` | User |
+| `/api/roster/export` | 971 | `export_roster()` | RosterService |
+| `/api/roster/template` | 1003 | `roster_template()` | CSV |
+| `/api/roster/upload` | 1024 | `upload_roster_api()` | RosterService |
+| `/api/roster` (GET) | 1115 | `get_roster_api()` | Roster |
+| `/api/roster/ban` | 1147 | `ban_student_api()` | BanService |
+| `/api/roster/clear` | 1172 | `clear_roster_api()` | RosterService |
+| `/api/admin/logs` | 1194 | `get_pass_logs()` | Session |
+| `/api/admin/logs/export` | 1230 | `export_logs()` | SessionService |
+| `/api/control/ban_overdue` | 1276 | `api_ban_overdue_students()` | SessionService, BanService |
+| `/api/control/delete_history` | 1304 | `api_delete_history()` | Session |
+
+### Migration Steps
+1. Copy each function from `app.py` → `routes/admin.py`
+2. Change decorator: `@app.route` → `@admin_bp.route`
+3. Add imports: `from app import db, User, Settings, Roster, Session`
+4. Test EACH route after migration
+5. Delete from `app.py` once verified
+6. Register blueprint in `app.py`
+
+### ⚠️ Critical Warnings
+- **Circular Imports**: May need `extensions.py` for shared `db`
+- **Helper Functions**: Decide where `get_settings()`, `get_current_user_id()` live
+- **Testing Required**: Breaking admin routes = no system access
+
+See artifact `implementation_plan.md` for complete Phase 2-4 details.
