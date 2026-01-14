@@ -124,8 +124,7 @@ class StudentName(db.Model):
     display_name = db.Column(db.String, nullable=False)  # Actual name to display
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     banned = db.Column(db.Boolean, nullable=False, default=False)  # Restroom ban flag
-    # TEMPORARILY DISABLED - needs proper migration
-    # banned_since = db.Column(db.DateTime(timezone=True), nullable=True)  
+    banned_since = db.Column(db.DateTime(timezone=True), nullable=True)  # Timestamp when ban started (for duration tracking)
     # 2.0: Add user_id FK (nullable for migration compatibility)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     
