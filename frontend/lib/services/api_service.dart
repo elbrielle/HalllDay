@@ -163,6 +163,26 @@ class ApiService {
     throw Exception('Failed to fetch roster');
   }
 
+  Future<void> addStudent(String name, String studentId) async {
+    final uri = _getUri('/api/roster/add');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'name': name, 'student_id': studentId}),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode == 409)
+      throw Exception('Student ID already exists');
+    if (response.statusCode != 200) throw Exception('Failed to add student');
+  }
+
+  Future<void> deleteStudent(int id) async {
+    final uri = _getUri('/api/roster/$id');
+    final response = await http.delete(uri);
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200) throw Exception('Failed to delete student');
+  }
+
   Future<void> joinQueue(String code, String token) async {
     final uri = _getUri('/api/queue/join');
     final response = await http.post(

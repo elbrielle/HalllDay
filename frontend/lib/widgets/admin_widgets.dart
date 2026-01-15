@@ -311,6 +311,124 @@ class _RosterManagerState extends State<RosterManager> {
     }
   }
 
+  Future<void> _deleteStudent(int index) async {
+    final s = _filtered[index];
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Student"),
+        content: Text(
+          "Are you sure you want to delete ${s['name']}? This cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await widget.api.deleteStudent(s['id']);
+      setState(() {
+        _filtered.removeAt(index);
+        _roster.removeWhere((item) => item['id'] == s['id']);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Student deleted'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddDialog() async {
+    final nameCtrl = TextEditingController();
+    final idCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Add Student"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: "Student Name",
+                hintText: "John Doe",
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: idCtrl,
+              decoration: const InputDecoration(
+                labelText: "Student ID",
+                hintText: "123456",
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              final id = idCtrl.text.trim();
+              if (name.isEmpty || id.isEmpty) return;
+
+              Navigator.pop(ctx); // Close dialog first
+
+              try {
+                await widget.api.addStudent(name, id);
+                await _load(); // Reload roster
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Student added'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text("Add"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -326,6 +444,16 @@ class _RosterManagerState extends State<RosterManager> {
                 const Text(
                   "Manage Roster & Bans",
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 16),
+                IconButton(
+                  onPressed: _showAddDialog,
+                  icon: const Icon(
+                    Icons.add_circle,
+                    color: Colors.green,
+                    size: 28,
+                  ),
+                  tooltip: "Add Student",
                 ),
                 const Spacer(),
                 IconButton(
@@ -438,6 +566,15 @@ class _RosterManagerState extends State<RosterManager> {
                                 value: isBanned,
                                 activeThumbColor: Colors.red,
                                 onChanged: (v) => _toggleBan(i, v),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () => _deleteStudent(i),
+                                tooltip: "Delete Student",
                               ),
                             ],
                           ),

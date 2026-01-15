@@ -540,6 +540,89 @@ def api_roster_ban():
         return jsonify(ok=False, error=str(e)), 500
 
 
+@admin_bp.route('/api/roster/add', methods=['POST'])
+def api_roster_add():
+    """Add a single student to the roster"""
+    from app import db, is_admin_authenticated, StudentName, cipher_suite
+    import hashlib
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+        
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    student_id = data.get('student_id', '').strip()
+    
+    if not name or not student_id:
+        return jsonify(ok=False, error="Name and Student ID are required"), 400
+        
+    user_id = get_current_user_id()
+    
+    try:
+        # Check if student already exists (by ID)
+        # Note: We can't easily query by encrypted_id without encrypting first
+        # But for uniqueness, we rely on name_hash usually, or just check if encryption matches
+        
+        # Calculate name_hash for lookup/uniqueness
+        # Using same logic as upload: student_user_id_student_id
+        name_hash = hashlib.sha256(f"student_{user_id}_{student_id}".encode()).hexdigest()[:16]
+        
+        existing = StudentName.query.filter_by(user_id=user_id, name_hash=name_hash).first()
+        if existing:
+            return jsonify(ok=False, error="Student ID already exists"), 409
+            
+        # Encrypt ID
+        encrypted_id = cipher_suite.encrypt(student_id.encode()).decode()
+        
+        s = StudentName(
+            display_name=name,
+            name_hash=name_hash,
+            encrypted_id=encrypted_id,
+            user_id=user_id,
+            banned=False
+        )
+        db.session.add(s)
+        db.session.commit()
+        
+        return jsonify(ok=True, message="Student added successfully", student={
+            "id": s.id,
+            "name": s.display_name,
+            "student_id": student_id,
+            "banned": False
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(ok=False, error=str(e)), 500
+
+
+@admin_bp.route('/api/roster/<int:student_db_id>', methods=['DELETE'])
+def api_roster_delete(student_db_id):
+    """Delete a single student from the roster"""
+    from app import db, is_admin_authenticated, StudentName
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+    
+    user_id = get_current_user_id()
+    
+    try:
+        # Find student by DB ID and User ID to ensure ownership
+        student = StudentName.query.filter_by(id=student_db_id, user_id=user_id).first()
+        
+        if not student:
+            return jsonify(ok=False, error="Student not found"), 404
+            
+        db.session.delete(student)
+        db.session.commit()
+        
+        return jsonify(ok=True, message="Student deleted successfully")
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(ok=False, error=str(e)), 500
+
+
 @admin_bp.route('/api/roster/clear', methods=['POST'])
 def api_roster_clear():
     """Clear roster and optionally session history"""
