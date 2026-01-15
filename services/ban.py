@@ -33,7 +33,6 @@ class BanService:
         """Ban or unban a student from using the restroom"""
         try:
             from datetime import datetime, timezone
-            import sys
             name_hash = self.roster_service._hash_student_id(student_id, user_id)
             
             # Build query with optional user_id scoping
@@ -46,21 +45,13 @@ class BanService:
                 student_name.banned = banned_status
                 # Set timestamp when banning, clear when unbanning
                 if banned_status:
-                    timestamp = datetime.now(timezone.utc)
-                    print(f"[BAN_DEBUG] Setting banned_since to: {timestamp} for student: {student_name.display_name}", file=sys.stderr)
-                    student_name.banned_since = timestamp
-                    print(f"[BAN_DEBUG] After assignment, banned_since is: {student_name.banned_since}", file=sys.stderr)
+                    student_name.banned_since = datetime.now(timezone.utc)
                 else:
-                    print(f"[BAN_DEBUG] Clearing banned_since for student: {student_name.display_name}", file=sys.stderr)
                     student_name.banned_since = None
                 self.db.session.commit()
-                print(f"[BAN_DEBUG] Commit successful for student: {student_name.display_name}", file=sys.stderr)
                 return True
             return False
-        except Exception as e:
-            print(f"[BAN_DEBUG] ERROR in set_student_banned:  {str(e)}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
+        except Exception:
             try:
                 self.db.session.rollback()
             except Exception:
