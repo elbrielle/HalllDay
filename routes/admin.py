@@ -236,6 +236,14 @@ def update_settings_api():
     if "enable_queue" in data:
         s.enable_queue = bool(data["enable_queue"])
     
+    # Schedule settings (2.1)
+    if "schedule_enabled" in data:
+        s.schedule_enabled = bool(data["schedule_enabled"])
+    if "timezone" in data:
+        s.timezone = data["timezone"] if data["timezone"] else None
+    if "allow_queue_while_suspended" in data:
+        s.allow_queue_while_suspended = bool(data["allow_queue_while_suspended"])
+    
     db.session.commit()
     return jsonify(ok=True, settings=get_settings(user_id))
 
