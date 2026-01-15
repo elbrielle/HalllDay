@@ -111,6 +111,12 @@ class Settings(db.Model):
     auto_ban_overdue = db.Column(db.Boolean, nullable=False, default=False)
     auto_promote_queue = db.Column(db.Boolean, nullable=False, default=False)
     enable_queue = db.Column(db.Boolean, nullable=False, default=False)
+    
+    # Schedule feature (2.1)
+    schedule_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    timezone = db.Column(db.String(50), nullable=True)  # e.g., "America/Chicago"
+    allow_queue_while_suspended = db.Column(db.Boolean, nullable=False, default=False)
+    
     # 2.0: Add user_id FK (nullable for migration compatibility, ID=1 is legacy global)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     
@@ -134,6 +140,40 @@ class StudentName(db.Model):
     __table_args__ = (
         db.UniqueConstraint('user_id', 'name_hash', name='uq_user_name_hash'),
     )
+
+
+class ScheduleEntry(db.Model):
+    """Time window when passes are allowed (with repeat options)
+    
+    Repeat types:
+    - 'none': One-time entry (only on start_date)
+    - 'weekdays': Monday-Friday
+    - 'weekly': Same day each week
+    - 'custom': Specific days (stored in repeat_days as '1,2,3,4,5')
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    
+    # Display
+    label = db.Column(db.String(100), nullable=False)  # "Passing Period 1"
+    
+    # Time range (stored as time, interpreted in teacher's timezone)
+    start_time = db.Column(db.Time, nullable=False)    # 08:15
+    end_time = db.Column(db.Time, nullable=False)      # 08:25
+    
+    # Date bounds (for semester/year scope)
+    start_date = db.Column(db.Date, nullable=False)    # 2026-01-06
+    end_date = db.Column(db.Date, nullable=True)       # 2026-05-23 (null = no end)
+    
+    # Repeat pattern
+    repeat_type = db.Column(db.String(20), nullable=False, default='weekdays')  # 'none', 'weekly', 'weekdays', 'custom'
+    repeat_days = db.Column(db.String(20), nullable=True)   # '0,1,2,3,4' for M-F (0=Mon, 6=Sun), only for 'custom'
+    
+    enabled = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    
+    user = db.relationship('User', backref='schedule_entries')
+
 
 # ---------- Service Initialization ----------
 # Initialize services after models are defined
@@ -436,7 +476,11 @@ def get_settings(user_id: Optional[int] = None):
             "kiosk_suspended": kiosk_suspended, 
             "auto_ban_overdue": auto_ban_overdue,
             "enable_queue": getattr(s, 'enable_queue', False),
-            "auto_promote_queue": getattr(s, 'auto_promote_queue', False)
+            "auto_promote_queue": getattr(s, 'auto_promote_queue', False),
+            # Schedule fields (2.1)
+            "schedule_enabled": getattr(s, 'schedule_enabled', False),
+            "timezone": getattr(s, 'timezone', None),
+            "allow_queue_while_suspended": getattr(s, 'allow_queue_while_suspended', False)
         }
     except Exception:
         # If query fails, return defaults
@@ -447,8 +491,93 @@ def get_settings(user_id: Optional[int] = None):
             "kiosk_suspended": False, 
             "auto_ban_overdue": False,
             "enable_queue": False,
-            "auto_promote_queue": False
+            "auto_promote_queue": False,
+            "schedule_enabled": False,
+            "timezone": None,
+            "allow_queue_while_suspended": False
         }
+
+
+def is_schedule_available(user_id: int, settings: dict) -> tuple[bool, str]:
+    """Check if kiosk is available based on schedule entries.
+    
+    Returns (is_available: bool, reason: str)
+    
+    Logic:
+    - If schedule_enabled is False, always available
+    - If manual kiosk_suspended is True, always suspended (manual override)
+    - Otherwise, check if current time falls within any active schedule window
+    """
+    # Manual override takes precedence
+    if settings.get('kiosk_suspended'):
+        return False, "Manually suspended"
+    
+    # Schedule feature disabled = always available
+    if not settings.get('schedule_enabled'):
+        return True, ""
+    
+    # Need timezone to evaluate schedule
+    tz_name = settings.get('timezone')
+    if not tz_name:
+        return True, "No timezone set"  # Fail-open if no timezone
+    
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        return True, "Invalid timezone"  # Fail-open on bad timezone
+    
+    # Get current local time for teacher
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(tz)
+    today_date = now_local.date()
+    today_weekday = now_local.weekday()  # 0=Monday, 6=Sunday
+    current_time = now_local.time()
+    
+    # Fetch enabled schedule entries for this user
+    entries = ScheduleEntry.query.filter_by(user_id=user_id, enabled=True).all()
+    
+    if not entries:
+        # No entries defined = always suspended when schedule mode is on
+        return False, "No schedule windows defined"
+    
+    # Check each entry
+    for e in entries:
+        # Date bounds check
+        if e.start_date > today_date:
+            continue  # Entry hasn't started yet
+        if e.end_date and e.end_date < today_date:
+            continue  # Entry has ended
+        
+        # Repeat pattern check
+        if e.repeat_type == 'none':
+            # One-time entry: only matches exact start_date
+            if e.start_date != today_date:
+                continue
+        elif e.repeat_type == 'weekdays':
+            # M-F only
+            if today_weekday > 4:  # 5=Sat, 6=Sun
+                continue
+        elif e.repeat_type == 'weekly':
+            # Same day of week as start_date
+            if e.start_date.weekday() != today_weekday:
+                continue
+        elif e.repeat_type == 'custom':
+            # Check if today's weekday is in repeat_days
+            if e.repeat_days:
+                allowed_days = [int(d) for d in e.repeat_days.split(',') if d.isdigit()]
+                if today_weekday not in allowed_days:
+                    continue
+            else:
+                continue  # No days specified = skip
+        
+        # Time range check
+        if e.start_time <= current_time <= e.end_time:
+            return True, f"In window: {e.label}"
+    
+    # Outside all windows
+    return False, "Outside scheduled times"
+
 
 @app.context_processor
 def inject_room_name():

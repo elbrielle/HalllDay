@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import 'package:file_picker/file_picker.dart';
 import '../widgets/app_nav_drawer.dart';
 import '../widgets/admin_widgets.dart';
+import '../widgets/schedule_widget.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -28,6 +29,11 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _enableQueue = false;
   bool _autoBanOverdue = false;
   Timer? _refreshTimer;
+
+  // Schedule settings (2.1)
+  bool _scheduleEnabled = false;
+  String? _timezone;
+  bool _allowQueueWhileSuspended = false;
 
   @override
   void initState() {
@@ -75,6 +81,12 @@ class _AdminScreenState extends State<AdminScreen> {
             _autoPromoteQueue = settings['auto_promote_queue'] == true;
             _enableQueue = settings['enable_queue'] == true;
             _autoBanOverdue = settings['auto_ban_overdue'] == true;
+
+            // Schedule settings (2.1)
+            _scheduleEnabled = settings['schedule_enabled'] == true;
+            _timezone = settings['timezone'] as String?;
+            _allowQueueWhileSuspended =
+                settings['allow_queue_while_suspended'] == true;
           }
         });
       }
@@ -111,6 +123,39 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         );
         _loadData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateScheduleSettings(
+    bool enabled,
+    String? timezone,
+    bool allowQueue,
+  ) async {
+    try {
+      await _api.updateSettings({
+        'schedule_enabled': enabled,
+        'timezone': timezone,
+        'allow_queue_while_suspended': allowQueue,
+      });
+      setState(() {
+        _scheduleEnabled = enabled;
+        _timezone = timezone;
+        _allowQueueWhileSuspended = allowQueue;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Schedule settings saved!'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1115,6 +1160,21 @@ class _AdminScreenState extends State<AdminScreen> {
                       ],
                     ),
                   ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Schedule Mode (2.1)
+                const SectionHeader(
+                  icon: Icons.schedule,
+                  title: "Schedule Mode",
+                ),
+                ScheduleManager(
+                  api: _api,
+                  scheduleEnabled: _scheduleEnabled,
+                  timezone: _timezone,
+                  allowQueueWhileSuspended: _allowQueueWhileSuspended,
+                  onSettingsChanged: _updateScheduleSettings,
                 ),
 
                 const SizedBox(height: 32),

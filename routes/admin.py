@@ -818,7 +818,181 @@ def api_delete_history():
 
 
 # ============================================================================
-# ALL 14 ADMIN ROUTES MIGRATED! ✅
+# SCHEDULE MANAGEMENT ROUTES (2.1)
 # ============================================================================
-# Next: Register blueprint in app.py and test
-# See PLANNING.md for testing checklist
+
+@admin_bp.route('/api/schedules', methods=['GET'])
+def api_schedules_list():
+    """List all schedule entries for current user"""
+    from app import db, is_admin_authenticated, ScheduleEntry
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+    
+    user_id = get_current_user_id()
+    entries = ScheduleEntry.query.filter_by(user_id=user_id).order_by(
+        ScheduleEntry.start_time.asc()
+    ).all()
+    
+    return jsonify(ok=True, entries=[{
+        "id": e.id,
+        "label": e.label,
+        "start_time": e.start_time.strftime("%H:%M") if e.start_time else None,
+        "end_time": e.end_time.strftime("%H:%M") if e.end_time else None,
+        "start_date": e.start_date.isoformat() if e.start_date else None,
+        "end_date": e.end_date.isoformat() if e.end_date else None,
+        "repeat_type": e.repeat_type,
+        "repeat_days": e.repeat_days,
+        "enabled": e.enabled
+    } for e in entries])
+
+
+@admin_bp.route('/api/schedules', methods=['POST'])
+def api_schedules_create():
+    """Create new schedule entry"""
+    from app import db, is_admin_authenticated, ScheduleEntry
+    from datetime import time, date as datelib
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+    
+    user_id = get_current_user_id()
+    data = request.get_json() or {}
+    
+    # Validate required fields
+    if not data.get('label'):
+        return jsonify(ok=False, error="Label is required"), 400
+    if not data.get('start_time'):
+        return jsonify(ok=False, error="Start time is required"), 400
+    if not data.get('end_time'):
+        return jsonify(ok=False, error="End time is required"), 400
+    if not data.get('start_date'):
+        return jsonify(ok=False, error="Start date is required"), 400
+    
+    try:
+        # Parse times (HH:MM format)
+        start_h, start_m = map(int, data['start_time'].split(':'))
+        end_h, end_m = map(int, data['end_time'].split(':'))
+        start_time = time(start_h, start_m)
+        end_time = time(end_h, end_m)
+        
+        # Parse dates (YYYY-MM-DD format)
+        start_date = datelib.fromisoformat(data['start_date'])
+        end_date = datelib.fromisoformat(data['end_date']) if data.get('end_date') else None
+        
+        # Validate repeat_type
+        repeat_type = data.get('repeat_type', 'weekdays')
+        if repeat_type not in ('none', 'weekly', 'weekdays', 'custom'):
+            return jsonify(ok=False, error="Invalid repeat_type"), 400
+        
+        # Validate repeat_days for custom
+        repeat_days = None
+        if repeat_type == 'custom':
+            repeat_days = data.get('repeat_days', '')
+            if not repeat_days:
+                return jsonify(ok=False, error="repeat_days required for custom repeat"), 400
+        
+        entry = ScheduleEntry(
+            user_id=user_id,
+            label=data['label'],
+            start_time=start_time,
+            end_time=end_time,
+            start_date=start_date,
+            end_date=end_date,
+            repeat_type=repeat_type,
+            repeat_days=repeat_days,
+            enabled=data.get('enabled', True)
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        return jsonify(ok=True, id=entry.id)
+    except ValueError as e:
+        return jsonify(ok=False, error=f"Invalid format: {e}"), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(ok=False, error=str(e)), 500
+
+
+@admin_bp.route('/api/schedules/<int:entry_id>', methods=['PATCH'])
+def api_schedules_update(entry_id: int):
+    """Update existing schedule entry"""
+    from app import db, is_admin_authenticated, ScheduleEntry
+    from datetime import time, date as datelib
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+    
+    user_id = get_current_user_id()
+    entry = ScheduleEntry.query.filter_by(id=entry_id, user_id=user_id).first()
+    
+    if not entry:
+        return jsonify(ok=False, error="Entry not found"), 404
+    
+    data = request.get_json() or {}
+    
+    try:
+        if 'label' in data:
+            entry.label = data['label']
+        
+        if 'start_time' in data:
+            h, m = map(int, data['start_time'].split(':'))
+            entry.start_time = time(h, m)
+        
+        if 'end_time' in data:
+            h, m = map(int, data['end_time'].split(':'))
+            entry.end_time = time(h, m)
+        
+        if 'start_date' in data:
+            entry.start_date = datelib.fromisoformat(data['start_date'])
+        
+        if 'end_date' in data:
+            entry.end_date = datelib.fromisoformat(data['end_date']) if data['end_date'] else None
+        
+        if 'repeat_type' in data:
+            if data['repeat_type'] not in ('none', 'weekly', 'weekdays', 'custom'):
+                return jsonify(ok=False, error="Invalid repeat_type"), 400
+            entry.repeat_type = data['repeat_type']
+        
+        if 'repeat_days' in data:
+            entry.repeat_days = data['repeat_days']
+        
+        if 'enabled' in data:
+            entry.enabled = bool(data['enabled'])
+        
+        db.session.commit()
+        return jsonify(ok=True)
+    except ValueError as e:
+        return jsonify(ok=False, error=f"Invalid format: {e}"), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(ok=False, error=str(e)), 500
+
+
+@admin_bp.route('/api/schedules/<int:entry_id>', methods=['DELETE'])
+def api_schedules_delete(entry_id: int):
+    """Delete schedule entry"""
+    from app import db, is_admin_authenticated, ScheduleEntry
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+    
+    user_id = get_current_user_id()
+    entry = ScheduleEntry.query.filter_by(id=entry_id, user_id=user_id).first()
+    
+    if not entry:
+        return jsonify(ok=False, error="Entry not found"), 404
+    
+    try:
+        db.session.delete(entry)
+        db.session.commit()
+        return jsonify(ok=True)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(ok=False, error=str(e)), 500
+
+
+# ============================================================================
+# ALL ADMIN ROUTES COMPLETE ✅
+# ============================================================================
+# 14 Original routes + 4 Schedule routes = 18 total

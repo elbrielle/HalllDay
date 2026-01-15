@@ -264,17 +264,18 @@ curl -X POST "https://yourapp.onrender.com/api/dev/fix_encrypted_ids" \
 
 ---
 
-#### Feature: Individual Roster Management
+#### Feature: Individual Roster Management ✅ (Completed)
 **Problem**: Teachers must upload entire CSV to add/remove students  
 **Solution**: Add individual student add/remove UI in admin dashboard
 
 **Implementation**:
-- Add new routes in `routes/admin.py`:
+- ✅ Added routes in `routes/admin.py`:
   - `POST /api/roster/add` - Add single student
   - `DELETE /api/roster/<id>` - Remove single student
-- Update Flutter admin UI with "Add Student" dialog
-- Update Flutter admin UI with inline delete buttons
-- **Complexity**: Medium (3-4 hours)
+- ✅ Updated Flutter admin UI with "Add Student" dialog
+- ✅ Updated Flutter admin UI with inline delete buttons
+- ✅ Added rate limiting (30/min) and cache refresh
+- **Complexity**: Medium (Completed)
 - **Dependencies**: None
 
 ---
@@ -311,37 +312,37 @@ curl -X POST "https://yourapp.onrender.com/api/dev/fix_encrypted_ids" \
 
 #### Feature: Class Period Schedules with Auto-Suspend
 **Problem**: Teachers need granular control over when restroom is available  
-**Solution**: Build time-based schedules for kiosk availability (e.g., 10/10 rules: 10 min into class, 10 min before end)
+**Solution**: Calendar-based scheduling with reusable templates (like clock.school)
 
-**Implementation Details**:
-- Add new `Schedule` model:
-  - `user_id` (FK to User)
-  - `day_of_week` (0-6 or "all")
-  - `start_time`, `end_time`
-  - `allow_restroom` (boolean)
-  - `queue_only_mode` (boolean - allow queue even when suspended)
-- Add schedule management routes in `routes/admin.py`:
-  - `GET /api/schedules` - List schedules
-  - `POST /api/schedules` - Create schedule
-  - `PATCH /api/schedules/<id>` - Update schedule
-  - `DELETE /api/schedules/<id>` - Delete schedule
-- Add schedule checker in `routes/kiosk.py`:
-  - Check current time against schedules before processing scan
-  - Auto-suspend kiosk if outside allowed times
-  - Optional: Allow queue-only mode when suspended
-- Update Flutter admin UI:
-  - Schedule builder with time pickers
-  - Visual timeline/calendar view
-  - Enable/disable auto-schedule feature
-- **Complexity**: High (8-12 hours)
-- **Dependencies**: None (standalone feature)
+**Architecture: Two-Tier Model**:
+1. **Schedule Templates**: Reusable named schedules ("Regular Day", "Late Start", "Testing Day")
+2. **Calendar Assignments**: Assign templates to specific dates for A/B/C day support
 
-**Phase 2 - Schedule Templates**:
-- Add exportable JSON format for schedules
-- Import/export schedule templates
-- Build community template library (future)
-- **Complexity**: Medium (4-6 hours)
-- **Dependencies**: Phase 1 complete
+**Implementation Phases**:
+
+**Phase 1 - Core MVP (6-8 hours)**:
+- Add `ScheduleTemplate` and `ScheduleWindow` models
+- Add settings fields: `schedule_enabled`, `timezone`, `allow_queue_while_suspended`
+- CRUD API for templates and windows
+- `is_kiosk_available()` evaluation logic
+- Admin UI: Template list, add/edit dialog, timezone picker
+- Timezone prompt required before enabling
+
+**Phase 2 - Calendar (4-6 hours)**:
+- Add `CalendarAssignment` model
+- API for assigning templates to dates
+- Calendar widget UI with date selection
+- Support for date-specific overrides
+
+**Phase 3 - Import/Export (2-3 hours)**:
+- Export template as JSON file
+- Import template from JSON file upload
+- Validation and error handling
+
+**Phase 4 - Community Store (Future)**:
+- Server-side template storage
+- Browse/search public templates
+- Not in current scope
 
 ---
 

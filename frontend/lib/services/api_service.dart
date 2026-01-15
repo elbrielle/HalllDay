@@ -341,4 +341,146 @@ class ApiService {
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load expanded stats: ${response.statusCode}');
   }
+
+  // --- SCHEDULE API (2.1) ---
+
+  Future<List<ScheduleEntry>> getSchedules() async {
+    final uri = _getUri('/api/schedules');
+    final response = await http.get(uri);
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode == 200) {
+      final body = json.decode(response.body);
+      final entries = body['entries'] as List;
+      return entries.map((e) => ScheduleEntry.fromJson(e)).toList();
+    }
+    throw Exception('Failed to load schedules');
+  }
+
+  Future<int> createSchedule(ScheduleEntry entry) async {
+    final uri = _getUri('/api/schedules');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(entry.toJson()),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode == 200) {
+      final body = json.decode(response.body);
+      return body['id'] as int;
+    }
+    final body = json.decode(response.body);
+    throw Exception(body['error'] ?? 'Failed to create schedule');
+  }
+
+  Future<void> updateSchedule(int id, Map<String, dynamic> updates) async {
+    final uri = _getUri('/api/schedules/$id');
+    final response = await http.patch(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(updates),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200) {
+      final body = json.decode(response.body);
+      throw Exception(body['error'] ?? 'Failed to update schedule');
+    }
+  }
+
+  Future<void> deleteSchedule(int id) async {
+    final uri = _getUri('/api/schedules/$id');
+    final response = await http.delete(uri);
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200)
+      throw Exception('Failed to delete schedule');
+  }
+}
+
+/// Schedule entry model for time-based kiosk availability
+class ScheduleEntry {
+  final int? id;
+  final String label;
+  final String startTime; // HH:MM format
+  final String endTime; // HH:MM format
+  final String startDate; // YYYY-MM-DD format
+  final String? endDate; // YYYY-MM-DD format (nullable)
+  final String repeatType; // 'none', 'weekly', 'weekdays', 'custom'
+  final String? repeatDays; // '0,1,2,3,4' for custom (0=Mon)
+  final bool enabled;
+
+  ScheduleEntry({
+    this.id,
+    required this.label,
+    required this.startTime,
+    required this.endTime,
+    required this.startDate,
+    this.endDate,
+    this.repeatType = 'weekdays',
+    this.repeatDays,
+    this.enabled = true,
+  });
+
+  factory ScheduleEntry.fromJson(Map<String, dynamic> json) {
+    return ScheduleEntry(
+      id: json['id'] as int?,
+      label: json['label'] as String,
+      startTime: json['start_time'] as String,
+      endTime: json['end_time'] as String,
+      startDate: json['start_date'] as String,
+      endDate: json['end_date'] as String?,
+      repeatType: json['repeat_type'] as String? ?? 'weekdays',
+      repeatDays: json['repeat_days'] as String?,
+      enabled: json['enabled'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'label': label,
+      'start_time': startTime,
+      'end_time': endTime,
+      'start_date': startDate,
+      if (endDate != null) 'end_date': endDate,
+      'repeat_type': repeatType,
+      if (repeatDays != null) 'repeat_days': repeatDays,
+      'enabled': enabled,
+    };
+  }
+
+  /// Get display-friendly time range (e.g., "8:15 AM - 8:25 AM")
+  String get timeRangeDisplay {
+    return '${_formatTime(startTime)} - ${_formatTime(endTime)}';
+  }
+
+  String _formatTime(String time) {
+    final parts = time.split(':');
+    int hour = int.parse(parts[0]);
+    final minute = parts[1];
+    final period = hour >= 12 ? 'PM' : 'AM';
+    if (hour > 12) hour -= 12;
+    if (hour == 0) hour = 12;
+    return '$hour:$minute $period';
+  }
+
+  /// Get display-friendly repeat description
+  String get repeatDisplay {
+    switch (repeatType) {
+      case 'none':
+        return 'One time';
+      case 'weekly':
+        return 'Weekly';
+      case 'weekdays':
+        return 'Mon-Fri';
+      case 'custom':
+        return _formatCustomDays();
+      default:
+        return repeatType;
+    }
+  }
+
+  String _formatCustomDays() {
+    if (repeatDays == null || repeatDays!.isEmpty) return 'Custom';
+    final dayNames = ['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'];
+    final days = repeatDays!.split(',').map((d) => int.tryParse(d) ?? 0);
+    return days.map((d) => dayNames[d % 7]).join('');
+  }
 }

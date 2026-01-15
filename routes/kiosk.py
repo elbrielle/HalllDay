@@ -168,16 +168,25 @@ def api_scan():
     """Main scan endpoint - handles student check-in/check-out"""
     from app import (db, Student, Session, Queue, get_current_user_id, get_settings,
                      get_student_name, get_memory_roster, is_student_banned, 
-                     set_student_banned, get_open_sessions, now_utc)
+                     set_student_banned, get_open_sessions, now_utc, is_schedule_available)
     
     payload = request.get_json(silent=True) or {}
     token = payload.get("token")
     user_id = get_current_user_id(token)
 
-    # Check if kiosk is suspended
+    # Check if kiosk is available (manual suspend + schedule)
     settings = get_settings(user_id)
-    if settings["kiosk_suspended"]:
-        return jsonify(ok=False, message="Kiosk is currently suspended by administrator"), 403
+    available, reason = is_schedule_available(user_id, settings)
+    if not available:
+        # Allow queue while suspended if enabled
+        if settings.get('allow_queue_while_suspended') and settings.get('enable_queue'):
+            # Will handle queue join below, but block immediate pass
+            pass
+        else:
+            if reason == "Manually suspended":
+                return jsonify(ok=False, message="Kiosk is currently suspended by administrator"), 403
+            else:
+                return jsonify(ok=False, message=f"Passes not available: {reason}"), 403
     
     code = (payload.get("code") or "").strip()
     if not code:
