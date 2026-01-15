@@ -539,11 +539,33 @@ def api_roster_ban():
         db.session.rollback()
         return jsonify(ok=False, error=str(e)), 500
 
+# Simple in-memory rate limiter for add endpoint
+_add_rate_limit = {}  # {user_id: [timestamps]}
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX = 30  # max adds per window
+
+def _check_rate_limit(user_id):
+    """Returns True if request is allowed, False if rate limited"""
+    import time
+    now = time.time()
+    
+    if user_id not in _add_rate_limit:
+        _add_rate_limit[user_id] = []
+    
+    # Clean old entries
+    _add_rate_limit[user_id] = [t for t in _add_rate_limit[user_id] if now - t < RATE_LIMIT_WINDOW]
+    
+    if len(_add_rate_limit[user_id]) >= RATE_LIMIT_MAX:
+        return False
+    
+    _add_rate_limit[user_id].append(now)
+    return True
+
 
 @admin_bp.route('/api/roster/add', methods=['POST'])
 def api_roster_add():
     """Add a single student to the roster"""
-    from app import db, is_admin_authenticated, StudentName, cipher_suite
+    from app import db, is_admin_authenticated, StudentName, cipher_suite, refresh_roster_cache
     import hashlib
     
     if not is_admin_authenticated():
@@ -557,6 +579,10 @@ def api_roster_add():
         return jsonify(ok=False, error="Name and Student ID are required"), 400
         
     user_id = get_current_user_id()
+    
+    # Rate limiting: 30 adds per minute per user
+    if not _check_rate_limit(user_id):
+        return jsonify(ok=False, error="Rate limit exceeded. Please wait before adding more students."), 429
     
     try:
         # Check if student already exists (by ID)
@@ -583,6 +609,7 @@ def api_roster_add():
         )
         db.session.add(s)
         db.session.commit()
+        refresh_roster_cache(user_id)
         
         return jsonify(ok=True, message="Student added successfully", student={
             "id": s.id,
@@ -599,7 +626,7 @@ def api_roster_add():
 @admin_bp.route('/api/roster/<int:student_db_id>', methods=['DELETE'])
 def api_roster_delete(student_db_id):
     """Delete a single student from the roster"""
-    from app import db, is_admin_authenticated, StudentName
+    from app import db, is_admin_authenticated, StudentName, refresh_roster_cache
     
     if not is_admin_authenticated():
         return jsonify(ok=False, error="Unauthorized"), 401
@@ -615,6 +642,7 @@ def api_roster_delete(student_db_id):
             
         db.session.delete(student)
         db.session.commit()
+        refresh_roster_cache(user_id)
         
         return jsonify(ok=True, message="Student deleted successfully")
         

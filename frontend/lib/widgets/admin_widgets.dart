@@ -363,70 +363,75 @@ class _RosterManagerState extends State<RosterManager> {
     final nameCtrl = TextEditingController();
     final idCtrl = TextEditingController();
 
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Add Student"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: "Student Name",
-                hintText: "John Doe",
+    try {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Add Student"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: "Student Name",
+                  hintText: "John Doe",
+                ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: idCtrl,
+                decoration: const InputDecoration(
+                  labelText: "Student ID",
+                  hintText: "123456",
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel"),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: idCtrl,
-              decoration: const InputDecoration(
-                labelText: "Student ID",
-                hintText: "123456",
-              ),
+            FilledButton(
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final id = idCtrl.text.trim();
+                if (name.isEmpty || id.isEmpty) return;
+
+                Navigator.pop(ctx); // Close dialog first
+
+                try {
+                  await widget.api.addStudent(name, id);
+                  await _load(); // Reload roster
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Student added'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text("Add"),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final id = idCtrl.text.trim();
-              if (name.isEmpty || id.isEmpty) return;
-
-              Navigator.pop(ctx); // Close dialog first
-
-              try {
-                await widget.api.addStudent(name, id);
-                await _load(); // Reload roster
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Student added'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text("Add"),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      nameCtrl.dispose();
+      idCtrl.dispose();
+    }
   }
 
   @override
