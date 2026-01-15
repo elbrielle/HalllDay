@@ -24,7 +24,8 @@ def _build_status_payload(user_id: Optional[int]) -> Dict[str, Any]:
     Keep this aligned with the Flutter `KioskStatus` model.
     """
     from app import (get_settings, get_current_holder, get_student_name, 
-                     get_open_sessions, to_local, Queue, is_schedule_available)
+                     get_open_sessions, to_local, Queue, is_schedule_available,
+                     db, Session, now_utc)
     
     settings = get_settings(user_id)
 
@@ -35,6 +36,32 @@ def _build_status_payload(user_id: Optional[int]) -> Dict[str, Any]:
     overdue_minutes = settings["overdue_minutes"]
     auto_ban_overdue = settings.get("auto_ban_overdue", False)
     auto_promote_queue = settings.get("auto_promote_queue", False)
+    
+    # AUTO-PROMOTE FROM QUEUE on schedule resume
+    # When kiosk becomes available and there's room, promote queued students
+    if available and settings.get("enable_queue") and auto_promote_queue:
+        open_sessions = get_open_sessions(user_id)
+        slots_available = settings["capacity"] - len(open_sessions)
+        
+        # Promote students while there are slots and queue entries
+        while slots_available > 0:
+            next_in_line = Queue.query.filter_by(user_id=user_id).order_by(Queue.joined_ts.asc()).first()
+            if not next_in_line:
+                break
+            
+            # Create new session for queued student
+            promoted_sess = Session(
+                student_id=next_in_line.student_id,
+                start_ts=now_utc(),
+                room=settings["room_name"],
+                user_id=user_id,
+                ended_by="auto_promote"
+            )
+            db.session.add(promoted_sess)
+            db.session.delete(next_in_line)
+            db.session.commit()
+            
+            slots_available -= 1
 
     # Server time in milliseconds for client sync (NTP-lite)
     server_now = datetime.now(timezone.utc)
