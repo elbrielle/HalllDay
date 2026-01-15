@@ -462,8 +462,8 @@ def api_roster_get():
 @admin_bp.route('/api/roster/ban', methods=['POST'])
 def api_roster_ban():
     """Ban or unban a student"""
-    from app import is_admin_authenticated, StudentName, cipher_suite
-    from services.ban import BanService
+    from app import db, is_admin_authenticated, StudentName
+    from datetime import datetime, timezone
     
     if not is_admin_authenticated():
         return jsonify(ok=False, error="Unauthorized"), 401
@@ -477,31 +477,20 @@ def api_roster_ban():
         
     user_id = get_current_user_id()
     try:
-        # Get the student to find their ID
         student = StudentName.query.filter_by(user_id=user_id, name_hash=hash_key).first()
         if student:
-            # Decrypt the student ID
-            student_id = None
-            if student.encrypted_id:
-                try:
-                    student_id = cipher_suite.decrypt(student.encrypted_id.encode()).decode()
-                except:
-                    return jsonify(ok=False, error="Failed to decrypt student ID"), 500
-            
-            if not student_id:
-                return jsonify(ok=False, error="Student ID not found"), 404
-            
-            # Use BanService to set ban status (this will set banned_since)
-            ban_service = BanService()
-            success = ban_service.set_student_banned(user_id, student_id, bool(should_ban))
-            
-            if success:
-                return jsonify(ok=True)
+            student.banned = bool(should_ban)
+            # Set banned_since timestamp when banning, clear when unbanning
+            if bool(should_ban):
+                student.banned_since = datetime.now(timezone.utc)
             else:
-                return jsonify(ok=False, error="Failed to update ban status"), 500
+                student.banned_since = None
+            db.session.commit()
+            return jsonify(ok=True)
         else:
             return jsonify(ok=False, error="Student not found"), 404
     except Exception as e:
+        db.session.rollback()
         return jsonify(ok=False, error=str(e)), 500
 
 
