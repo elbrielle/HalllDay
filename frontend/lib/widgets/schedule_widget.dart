@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:universal_html/html.dart' as html;
 import '../services/api_service.dart';
 
 /// Common US timezones for dropdown selection
@@ -808,16 +811,124 @@ class _ScheduleManagerState extends State<ScheduleManager> {
   }
 
   void _exportSchedules() {
-    // TODO: Implement JSON export
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Export coming soon')));
+    if (_entries.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No schedules to export')));
+      return;
+    }
+
+    // Convert entries to JSON
+    final exportData = {
+      'version': 1,
+      'exported_at': DateTime.now().toIso8601String(),
+      'entries': _entries.map((e) => e.toJson()).toList(),
+    };
+    final jsonString = const JsonEncoder.withIndent('  ').convert(exportData);
+
+    // Create download
+    final bytes = utf8.encode(jsonString);
+    final blob = html.Blob([bytes], 'application/json');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute(
+        'download',
+        'halllday_schedule_${DateFormat('yyyyMMdd').format(DateTime.now())}.json',
+      )
+      ..click();
+    html.Url.revokeObjectUrl(url);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Schedule exported!'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
-  void _importSchedules() {
-    // TODO: Implement JSON import
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Import coming soon')));
+  Future<void> _importSchedules() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final bytes = result.files.first.bytes;
+      if (bytes == null) {
+        throw Exception('Could not read file');
+      }
+
+      final jsonString = utf8.decode(bytes);
+      final data = json.decode(jsonString) as Map<String, dynamic>;
+
+      if (data['entries'] == null || data['entries'] is! List) {
+        throw Exception('Invalid schedule file format');
+      }
+
+      final entries = (data['entries'] as List)
+          .map((e) => ScheduleEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      if (entries.isEmpty) {
+        throw Exception('No entries found in file');
+      }
+
+      // Confirm import
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Import Schedules'),
+          content: Text(
+            'Import ${entries.length} schedule entries? This will add to your existing schedules.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+
+      // Create each entry
+      int created = 0;
+      for (final entry in entries) {
+        try {
+          await widget.api.createSchedule(entry);
+          created++;
+        } catch (e) {
+          debugPrint('Failed to import entry: ${entry.label} - $e');
+        }
+      }
+
+      await _loadSchedules();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Imported $created of ${entries.length} schedules'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
