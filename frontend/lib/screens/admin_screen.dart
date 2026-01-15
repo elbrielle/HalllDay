@@ -950,7 +950,7 @@ class _AdminScreenState extends State<AdminScreen> {
                               builder: (c) => RosterManager(api: _api),
                             ),
                             icon: const Icon(Icons.list),
-                            label: const Text("Manage Bans & View List"),
+                            label: const Text("Manage Roster & Bans"),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.green[800],
                             ),
