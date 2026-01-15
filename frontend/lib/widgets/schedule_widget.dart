@@ -20,16 +20,13 @@ class ScheduleManager extends StatefulWidget {
   final ApiService api;
   final bool scheduleEnabled;
   final String? timezone;
-  final bool allowQueueWhileSuspended;
-  final Function(bool enabled, String? timezone, bool allowQueue)
-  onSettingsChanged;
+  final Function(bool enabled, String? timezone) onSettingsChanged;
 
   const ScheduleManager({
     super.key,
     required this.api,
     required this.scheduleEnabled,
     required this.timezone,
-    required this.allowQueueWhileSuspended,
     required this.onSettingsChanged,
   });
 
@@ -124,11 +121,7 @@ class _ScheduleManagerState extends State<ScheduleManager> {
               // Show timezone picker first
               _showTimezonePrompt();
             } else {
-              widget.onSettingsChanged(
-                enabled,
-                widget.timezone,
-                widget.allowQueueWhileSuspended,
-              );
+              widget.onSettingsChanged(enabled, widget.timezone);
             }
           },
         ),
@@ -151,29 +144,9 @@ class _ScheduleManagerState extends State<ScheduleManager> {
                 return DropdownMenuItem(value: tz, child: Text(label));
               }).toList(),
               onChanged: (tz) {
-                widget.onSettingsChanged(
-                  widget.scheduleEnabled,
-                  tz,
-                  widget.allowQueueWhileSuspended,
-                );
+                widget.onSettingsChanged(widget.scheduleEnabled, tz);
               },
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Checkbox(
-              value: widget.allowQueueWhileSuspended,
-              onChanged: (v) {
-                widget.onSettingsChanged(
-                  widget.scheduleEnabled,
-                  widget.timezone,
-                  v ?? false,
-                );
-              },
-            ),
-            const Text('Allow waitlist while suspended'),
           ],
         ),
       ],
@@ -455,11 +428,7 @@ class _ScheduleManagerState extends State<ScheduleManager> {
               }).toList(),
               onChanged: (tz) {
                 if (tz != null) {
-                  widget.onSettingsChanged(
-                    true,
-                    tz,
-                    widget.allowQueueWhileSuspended,
-                  );
+                  widget.onSettingsChanged(true, tz);
                   Navigator.pop(ctx);
                 }
               },

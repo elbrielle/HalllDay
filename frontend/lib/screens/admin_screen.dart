@@ -114,6 +114,7 @@ class _AdminScreenState extends State<AdminScreen> {
         'auto_promote_queue': _autoPromoteQueue,
         'enable_queue': _enableQueue,
         'auto_ban_overdue': _autoBanOverdue,
+        'allow_queue_while_suspended': _allowQueueWhileSuspended,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -133,21 +134,15 @@ class _AdminScreenState extends State<AdminScreen> {
     }
   }
 
-  Future<void> _updateScheduleSettings(
-    bool enabled,
-    String? timezone,
-    bool allowQueue,
-  ) async {
+  Future<void> _updateScheduleSettings(bool enabled, String? timezone) async {
     try {
       await _api.updateSettings({
         'schedule_enabled': enabled,
         'timezone': timezone,
-        'allow_queue_while_suspended': allowQueue,
       });
       setState(() {
         _scheduleEnabled = enabled;
         _timezone = timezone;
-        _allowQueueWhileSuspended = allowQueue;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1133,6 +1128,23 @@ class _AdminScreenState extends State<AdminScreen> {
                               contentPadding: EdgeInsets.zero,
                             ),
                           ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16.0),
+                            child: CheckboxListTile(
+                              title: const Text(
+                                "Allow Waitlist While Suspended",
+                              ),
+                              subtitle: const Text(
+                                "Students can join the waitlist when kiosk is manually or schedule-suspended.",
+                              ),
+                              value: _allowQueueWhileSuspended,
+                              onChanged: (val) => setState(
+                                () => _allowQueueWhileSuspended = val ?? false,
+                              ),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
                         ],
 
                         const Divider(),
@@ -1173,7 +1185,6 @@ class _AdminScreenState extends State<AdminScreen> {
                   api: _api,
                   scheduleEnabled: _scheduleEnabled,
                   timezone: _timezone,
-                  allowQueueWhileSuspended: _allowQueueWhileSuspended,
                   onSettingsChanged: _updateScheduleSettings,
                 ),
 
