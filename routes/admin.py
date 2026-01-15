@@ -343,7 +343,11 @@ def api_roster_template():
 
 @admin_bp.route('/api/roster/upload', methods=['POST'])
 def api_roster_upload():
-    """Upload roster CSV file"""
+    """Upload roster CSV file with FERPA-compliant validation.
+    
+    FERPA Compliance: All students MUST have an encrypted_id.
+    If CSV row is missing student_id, a placeholder ID is auto-generated.
+    """
     from app import (db, is_admin_authenticated, StudentName, cipher_suite, 
                      refresh_roster_cache)
     import hashlib
@@ -368,11 +372,21 @@ def api_roster_upload():
         reader = csv.reader(stream)
         
         count = 0
-        for row in reader:
-            if not row: continue
+        skipped_rows = []  # Rows that were skipped with reasons
+        generated_ids = []  # Rows where placeholder IDs were generated
+        auto_id_counter = 0  # Counter for auto-generated IDs
+        
+        for row_num, row in enumerate(reader, start=1):
+            if not row: 
+                continue
             
             col0 = row[0].strip() if len(row) > 0 else ""
             col1 = row[1].strip() if len(row) > 1 else ""
+            
+            # Skip header row
+            if row_num == 1 and (col0.lower() in ['student_id', 'id', 'studentid'] or 
+                                  col1.lower() in ['name', 'student_name', 'studentname']):
+                continue
             
             # Auto-detect format (ID, Name) or (Name, ID)
             name = None
@@ -388,15 +402,25 @@ def api_roster_upload():
                 name = col0
                 student_id = col1
             
+            # FERPA Compliance: Skip rows without a name
             if not name:
+                skipped_rows.append({"row": row_num, "reason": "Missing name"})
                 continue
             
-            hash_source = student_id if student_id else f"row_{count}"
-            name_hash = hashlib.sha256(f"student_{user_id}_{hash_source}".encode()).hexdigest()[:16]
+            # FERPA Compliance: Generate placeholder ID if missing
+            # This ensures all records have an encrypted_id for data protection
+            if not student_id:
+                auto_id_counter += 1
+                student_id = f"AUTO_{user_id}_{auto_id_counter:06d}"
+                generated_ids.append({
+                    "row": row_num, 
+                    "name": name, 
+                    "generated_id": student_id
+                })
             
-            encrypted_id = None
-            if student_id:
-                encrypted_id = cipher_suite.encrypt(student_id.encode()).decode()
+            # Create hash and encrypt ID (always encrypted now)
+            name_hash = hashlib.sha256(f"student_{user_id}_{student_id}".encode()).hexdigest()[:16]
+            encrypted_id = cipher_suite.encrypt(student_id.encode()).decode()
             
             s = StudentName(
                 display_name=name,
@@ -410,11 +434,33 @@ def api_roster_upload():
             
         db.session.commit()
         refresh_roster_cache(user_id)
-        return jsonify(ok=True, count=count)
+        
+        # Build response with detailed feedback
+        response = {
+            "ok": True, 
+            "count": count,
+            "message": f"Successfully imported {count} students"
+        }
+        
+        if generated_ids:
+            response["generated_ids_count"] = len(generated_ids)
+            response["generated_ids"] = generated_ids[:10]  # Limit to first 10 for brevity
+            if len(generated_ids) > 10:
+                response["generated_ids_truncated"] = True
+            response["message"] += f" ({len(generated_ids)} with auto-generated IDs)"
+            
+        if skipped_rows:
+            response["skipped_count"] = len(skipped_rows)
+            response["skipped_rows"] = skipped_rows[:10]  # Limit to first 10
+            if len(skipped_rows) > 10:
+                response["skipped_truncated"] = True
+        
+        return jsonify(response)
         
     except Exception as e:
         db.session.rollback()
         return jsonify(ok=False, error=str(e)), 500
+
 
 
 @admin_bp.route('/api/roster', methods=['GET'])

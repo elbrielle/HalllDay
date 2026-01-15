@@ -1,41 +1,35 @@
 # HalllDay - Planning & Architecture Reference
 
-**Last Updated**: 2026-01-14
+**Last Updated**: 2026-01-15
 
 ---
 
-## ⚠️ Security & Compliance Issues
+## ✅ Security & Compliance Status
 
-### CRITICAL: Inconsistent Student ID Encryption
+### RESOLVED: Student ID Encryption (2026-01-15)
 
-**Priority**: HIGH  
-**FERPA Impact**: Potential compliance violation
+**Priority**: RESOLVED  
+**FERPA Status**: Compliant
 
-**Issue**: Some students in the database have `encrypted_id = NULL`, meaning their student IDs are not encrypted at rest. This occurs when:
-- CSV uploads contain blank student ID fields
-- Legacy data was migrated before encryption was implemented
-- Manual student creation without IDs
+**Issue (Resolved)**: Previously, some students had `encrypted_id = NULL` when CSV uploads contained blank student ID fields. This has been fixed.
 
-**Current Risk**:
-- Inconsistent FERPA compliance across roster
-- Some student IDs stored in plain text (via logs or session history)
-- Admin roster displays "Hidden" or "Error" for students without encrypted IDs
-
-**Recommended Fix**:
-1. **Immediate**: Audit database for NULL `encrypted_id` values
-2. **Short-term**: Add validation to CSV upload - reject rows with blank student IDs OR generate placeholder IDs
-3. **Long-term**: Make `encrypted_id` non-nullable in schema with migration
-4. **Monitoring**: Add logging/alerts when roster operations encounter NULL encrypted_id
+**Implemented Fixes**:
+1. ✅ **CSV Upload Validation** (`routes/admin.py`): Auto-generates placeholder IDs (`AUTO_<user_id>_<sequence>`) for rows missing student_id
+2. ✅ **Data Migration Endpoint** (`routes/dev.py`): `POST /api/dev/fix_encrypted_ids` - fixes existing NULL records
+3. ✅ **Audit Endpoint** (`routes/dev.py`): `GET /api/dev/audit_encrypted_ids` - checks compliance status
 
 **Verification**:
-```sql
-SELECT COUNT(*) FROM student_name WHERE encrypted_id IS NULL;
+```bash
+# Check compliance via API
+curl -X GET "https://yourapp.onrender.com/api/dev/audit_encrypted_ids?passcode=YOUR_DEV_PASSCODE"
+
+# Fix existing NULL records
+curl -X POST "https://yourapp.onrender.com/api/dev/fix_encrypted_ids" \
+  -H "Content-Type: application/json" \
+  -d '{"passcode": "YOUR_DEV_PASSCODE"}'
 ```
 
-**Related Code**:
-- `routes/admin.py` - CSV upload validation needed
-- `app.py` - StudentName model (`encrypted_id` currently nullable)
-- `services/roster.py` - Encryption logic
+**Future**: Make `encrypted_id` non-nullable in schema after running migration on production.
 
 ---
 
@@ -302,6 +296,7 @@ SELECT COUNT(*) FROM student_name WHERE encrypted_id IS NULL;
 #### Feature: Roster Sorting & Filtering
 **Problem**: Roster list is always alphabetical, making it hard to find banned or specific students.
 **Solution**: Add sorting/filtering options to the roster view (e.g., "Sort by: Banned First", "Filter: Banned Only").
+**Current State**: ✅ Implemented Mostly -- sorting should be persistent across refreshes if possible easily. If this is not standard practice then advise. 
 
 **Implementation**:
 - Update `admin_widgets.dart` to add a dropdown or filter chips

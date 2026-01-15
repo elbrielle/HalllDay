@@ -125,3 +125,120 @@ def api_dev_expanded_stats():
         "teachers": teachers_data,
         "activity": activity_log
     })
+
+
+# ============================================================================
+# FERPA COMPLIANCE MIGRATIONS
+# ============================================================================
+
+@dev_bp.route("/api/dev/fix_encrypted_ids", methods=["POST"])
+def api_fix_encrypted_ids():
+    """
+    FERPA Compliance Migration: Fix NULL encrypted_id records.
+    
+    This endpoint finds all StudentName records with NULL encrypted_id
+    and generates placeholder IDs for them to ensure FERPA compliance.
+    
+    Security: Requires dev authentication.
+    """
+    import config
+    from app import db, StudentName, cipher_suite
+    
+    # Check session auth OR inline passcode
+    if not session.get('dev_authenticated'):
+        data = request.get_json(silent=True) or {}
+        passcode = data.get('passcode')
+        
+        if passcode != os.environ.get("DEV_PASSCODE") and passcode != config.ADMIN_PASSCODE:
+            return jsonify(ok=False, error="Unauthorized"), 401
+    
+    try:
+        # Find all records with NULL encrypted_id
+        null_records = StudentName.query.filter(StudentName.encrypted_id == None).all()
+        
+        if not null_records:
+            return jsonify(
+                ok=True,
+                message="No records require migration",
+                fixed_count=0,
+                already_compliant=True
+            )
+        
+        # Group by user_id to generate sequential IDs per user
+        records_by_user = {}
+        for record in null_records:
+            user_id = record.user_id
+            if user_id not in records_by_user:
+                records_by_user[user_id] = []
+            records_by_user[user_id].append(record)
+        
+        fixed_count = 0
+        fixed_details = []
+        
+        for user_id, records in records_by_user.items():
+            for idx, record in enumerate(records, start=1):
+                # Generate placeholder ID
+                placeholder_id = f"MIGRATED_{user_id or 'LEGACY'}_{idx:06d}"
+                
+                # Encrypt and update
+                record.encrypted_id = cipher_suite.encrypt(placeholder_id.encode()).decode()
+                fixed_count += 1
+                
+                # Log first 10 per user for verification
+                if idx <= 10:
+                    fixed_details.append({
+                        "user_id": user_id,
+                        "name": record.display_name,
+                        "generated_id": placeholder_id
+                    })
+        
+        db.session.commit()
+        
+        return jsonify(
+            ok=True,
+            message=f"Successfully migrated {fixed_count} records to FERPA compliance",
+            fixed_count=fixed_count,
+            users_affected=len(records_by_user),
+            sample_fixes=fixed_details[:20]  # Limit response size
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(ok=False, error=str(e)), 500
+
+
+@dev_bp.route("/api/dev/audit_encrypted_ids", methods=["GET"])
+def api_audit_encrypted_ids():
+    """
+    Audit endpoint to check FERPA compliance status.
+    
+    Returns count of records with and without encrypted_id.
+    """
+    import config
+    from app import StudentName
+    
+    # Check session auth OR query param passcode
+    if not session.get('dev_authenticated'):
+        passcode = request.args.get('passcode')
+        
+        if passcode != os.environ.get("DEV_PASSCODE") and passcode != config.ADMIN_PASSCODE:
+            return jsonify(ok=False, error="Unauthorized"), 401
+    
+    try:
+        total_records = StudentName.query.count()
+        null_count = StudentName.query.filter(StudentName.encrypted_id == None).count()
+        compliant_count = total_records - null_count
+        
+        compliance_status = "COMPLIANT" if null_count == 0 else "NON-COMPLIANT"
+        
+        return jsonify(
+            ok=True,
+            compliance_status=compliance_status,
+            total_students=total_records,
+            encrypted_count=compliant_count,
+            null_encrypted_id_count=null_count,
+            compliance_percentage=round((compliant_count / total_records * 100), 2) if total_records > 0 else 100
+        )
+        
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 500
