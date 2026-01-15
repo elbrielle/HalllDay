@@ -225,6 +225,9 @@ class _RosterManagerState extends State<RosterManager> {
   List<Map<String, dynamic>> _filtered = [];
   final TextEditingController _searchCtrl = TextEditingController();
 
+  String _filterOption = 'All'; // All, Banned Only
+  String _sortOption = 'Name (A-Z)'; // Name (A-Z), Name (Z-A), Banned First
+
   @override
   void initState() {
     super.initState();
@@ -254,11 +257,35 @@ class _RosterManagerState extends State<RosterManager> {
   void _filter() {
     final q = _searchCtrl.text.toLowerCase();
     setState(() {
-      _filtered = _roster.where((s) {
+      // 1. Filter
+      var temp = _roster.where((s) {
         final name = (s['name'] ?? '').toString().toLowerCase();
         final id = (s['student_id'] ?? '').toString().toLowerCase();
-        return name.contains(q) || id.contains(q);
+        final matchesSearch = name.contains(q) || id.contains(q);
+
+        if (_filterOption == 'Banned Only') {
+          return matchesSearch && (s['banned'] == true);
+        }
+        return matchesSearch;
       }).toList();
+
+      // 2. Sort
+      temp.sort((a, b) {
+        if (_sortOption == 'Banned First') {
+          final banA = (a['banned'] == true) ? 1 : 0;
+          final banB = (b['banned'] == true) ? 1 : 0;
+          if (banA != banB) return banB.compareTo(banA); // Banned (1) first
+          // Secondary sort: Name A-Z
+          return (a['name'] ?? '').compareTo(b['name'] ?? '');
+        } else if (_sortOption == 'Name (Z-A)') {
+          return (b['name'] ?? '').compareTo(a['name'] ?? '');
+        } else {
+          // Name (A-Z) - default
+          return (a['name'] ?? '').compareTo(b['name'] ?? '');
+        }
+      });
+
+      _filtered = temp;
     });
   }
 
@@ -316,6 +343,49 @@ class _RosterManagerState extends State<RosterManager> {
                 border: OutlineInputBorder(),
               ),
               onChanged: (_) => _filter(),
+            ),
+            const SizedBox(height: 16),
+            // Filter & Sort Controls
+            Row(
+              children: [
+                // Filter Dropdown
+                const Text(
+                  "Show: ",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                DropdownButton<String>(
+                  value: _filterOption,
+                  items: ['All', 'Banned Only'].map((String val) {
+                    return DropdownMenuItem(value: val, child: Text(val));
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _filterOption = val);
+                      _filter(); // Re-run filter logic
+                    }
+                  },
+                ),
+                const SizedBox(width: 24),
+                // Sort Dropdown
+                const Text(
+                  "Sort: ",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                DropdownButton<String>(
+                  value: _sortOption,
+                  items: ['Name (A-Z)', 'Name (Z-A)', 'Banned First'].map((
+                    String val,
+                  ) {
+                    return DropdownMenuItem(value: val, child: Text(val));
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _sortOption = val);
+                      _filter(); // Re-run sort logic
+                    }
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Expanded(

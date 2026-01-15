@@ -257,15 +257,15 @@ SELECT COUNT(*) FROM student_name WHERE encrypted_id IS NULL;
 
 ### Priority 1: User Experience Improvements (Queue & Roster Management)
 
-#### Feature: Self-Service Queue Removal
+#### Feature: Self-Service Queue Removal ✅ (Completed)
 **Problem**: Students in the waitlist cannot remove themselves  
 **Solution**: Allow students to scan badge again while in queue to remove themselves
 
 **Implementation**:
-- Modify `POST /api/scan` in `routes/kiosk.py`
-- Check if student is in queue before adding
-- If already in queue, remove them and return success message
-- **Complexity**: Low (1-2 hours)
+- ✅ Modify `POST /api/scan` in `routes/kiosk.py`
+- ✅ Check if student is in queue before adding
+- ✅ If already in queue, remove them and return success message
+- **Complexity**: Low (Completed)
 - **Dependencies**: None
 
 ---
@@ -296,6 +296,19 @@ SELECT COUNT(*) FROM student_name WHERE encrypted_id IS NULL;
 - Update Flutter admin UI to display ban days
 - **Complexity**: Low (2-3 hours)
 - **Dependencies**: Database migration
+
+---
+
+#### Feature: Roster Sorting & Filtering
+**Problem**: Roster list is always alphabetical, making it hard to find banned or specific students.
+**Solution**: Add sorting/filtering options to the roster view (e.g., "Sort by: Banned First", "Filter: Banned Only").
+
+**Implementation**:
+- Update `admin_widgets.dart` to add a dropdown or filter chips
+- Implement sorting logic in the Flutter client (backend already sends all data)
+  - Sort by: Name (A-Z), Name (Z-A), Banned Status (Banned First)
+- **Complexity**: Low (2-3 hours)
+- **Dependencies**: None
 
 ---
 
