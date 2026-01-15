@@ -284,7 +284,7 @@ def api_scan():
 
 
     # CAPACITY CHECK & START
-    if len(open_sessions) >= settings["capacity"]:
+    if len(open_sessions) >= settings["capacity"] or (not available):
          # Queue Prompt / Auto-Join
          existing_q = Queue.query.filter_by(user_id=user_id, student_id=code).first()
          if existing_q:
