@@ -24,12 +24,15 @@ def _build_status_payload(user_id: Optional[int]) -> Dict[str, Any]:
     Keep this aligned with the Flutter `KioskStatus` model.
     """
     from app import (get_settings, get_current_holder, get_student_name, 
-                     get_open_sessions, to_local, Queue)
+                     get_open_sessions, to_local, Queue, is_schedule_available)
     
     settings = get_settings(user_id)
 
+    # Check schedule availability (already checks manual override)
+    available, _ = is_schedule_available(user_id, settings)
+    kiosk_suspended = not available
+    
     overdue_minutes = settings["overdue_minutes"]
-    kiosk_suspended = settings["kiosk_suspended"]
     auto_ban_overdue = settings.get("auto_ban_overdue", False)
     auto_promote_queue = settings.get("auto_promote_queue", False)
 
