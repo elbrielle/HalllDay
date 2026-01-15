@@ -992,7 +992,71 @@ def api_schedules_delete(entry_id: int):
         return jsonify(ok=False, error=str(e)), 500
 
 
+@admin_bp.route('/api/schedules/debug', methods=['GET'])
+def api_schedules_debug():
+    """Debug endpoint to trace schedule evaluation (REMOVE IN PRODUCTION)"""
+    from app import db, is_admin_authenticated, ScheduleEntry, get_settings, is_schedule_available
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    
+    if not is_admin_authenticated():
+        return jsonify(ok=False, error="Unauthorized"), 401
+    
+    user_id = get_current_user_id()
+    settings = get_settings(user_id)
+    
+    # Get schedule status
+    available, reason = is_schedule_available(user_id, settings)
+    
+    # Get timezone info
+    tz_name = settings.get('timezone')
+    now_utc = datetime.now(timezone.utc)
+    now_local = None
+    today_date = None
+    today_weekday = None
+    current_time = None
+    
+    if tz_name:
+        try:
+            tz = ZoneInfo(tz_name)
+            now_local = now_utc.astimezone(tz)
+            today_date = now_local.date().isoformat()
+            today_weekday = now_local.weekday()
+            current_time = now_local.time().strftime("%H:%M:%S")
+        except Exception as e:
+            pass
+    
+    # Get entries
+    entries = ScheduleEntry.query.filter_by(user_id=user_id).all()
+    entries_debug = [{
+        "id": e.id,
+        "label": e.label,
+        "enabled": e.enabled,
+        "start_time": e.start_time.strftime("%H:%M") if e.start_time else None,
+        "end_time": e.end_time.strftime("%H:%M") if e.end_time else None,
+        "start_date": e.start_date.isoformat() if e.start_date else None,
+        "end_date": e.end_date.isoformat() if e.end_date else None,
+        "repeat_type": e.repeat_type,
+        "repeat_days": e.repeat_days,
+    } for e in entries]
+    
+    return jsonify(
+        ok=True,
+        schedule_enabled=settings.get('schedule_enabled'),
+        timezone=tz_name,
+        kiosk_suspended_manual=settings.get('kiosk_suspended'),
+        now_utc=now_utc.isoformat(),
+        now_local=now_local.isoformat() if now_local else None,
+        today_date=today_date,
+        today_weekday=today_weekday,
+        current_time=current_time,
+        is_available=available,
+        reason=reason,
+        entries=entries_debug,
+    )
+
+
 # ============================================================================
 # ALL ADMIN ROUTES COMPLETE ✅
 # ============================================================================
-# 14 Original routes + 4 Schedule routes = 18 total
+# 14 Original routes + 4 Schedule routes + 1 Debug = 19 total
