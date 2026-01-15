@@ -1,6 +1,41 @@
 # HalllDay - Planning & Architecture Reference
 
-**Last Updated**: 2026-01-13
+**Last Updated**: 2026-01-14
+
+---
+
+## ⚠️ Security & Compliance Issues
+
+### CRITICAL: Inconsistent Student ID Encryption
+
+**Priority**: HIGH  
+**FERPA Impact**: Potential compliance violation
+
+**Issue**: Some students in the database have `encrypted_id = NULL`, meaning their student IDs are not encrypted at rest. This occurs when:
+- CSV uploads contain blank student ID fields
+- Legacy data was migrated before encryption was implemented
+- Manual student creation without IDs
+
+**Current Risk**:
+- Inconsistent FERPA compliance across roster
+- Some student IDs stored in plain text (via logs or session history)
+- Admin roster displays "Hidden" or "Error" for students without encrypted IDs
+
+**Recommended Fix**:
+1. **Immediate**: Audit database for NULL `encrypted_id` values
+2. **Short-term**: Add validation to CSV upload - reject rows with blank student IDs OR generate placeholder IDs
+3. **Long-term**: Make `encrypted_id` non-nullable in schema with migration
+4. **Monitoring**: Add logging/alerts when roster operations encounter NULL encrypted_id
+
+**Verification**:
+```sql
+SELECT COUNT(*) FROM student_name WHERE encrypted_id IS NULL;
+```
+
+**Related Code**:
+- `routes/admin.py` - CSV upload validation needed
+- `app.py` - StudentName model (`encrypted_id` currently nullable)
+- `services/roster.py` - Encryption logic
 
 ---
 
