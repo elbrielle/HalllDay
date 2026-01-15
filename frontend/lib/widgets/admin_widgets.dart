@@ -332,6 +332,13 @@ class _RosterManagerState extends State<RosterManager> {
                         final isBanned = s['banned'] == true;
                         final banDays = s['ban_days'];
 
+                        // DEBUG: Print ban_days value
+                        if (isBanned) {
+                          print(
+                            'DEBUG: Student ${s['name']} - banned=$isBanned, ban_days=$banDays, type=${banDays.runtimeType}',
+                          );
+                        }
+
                         // Build subtitle with ID and ban duration
                         String subtitle = "ID: $id";
                         if (isBanned && banDays != null) {
