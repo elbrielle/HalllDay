@@ -1,0 +1,178 @@
+:root {
+  /* Material 3 Color Tokens (Light/Dark aware) */
+  --md-sys-color-primary: #006c4c;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #89f8c7;
+  --md-sys-color-on-primary-container: #002114;
+  --md-sys-color-secondary: #4d6357;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #cfe9d9;
+  --md-sys-color-on-secondary-container: #092016;
+  --md-sys-color-tertiary: #3d6373;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #c1e8fb;
+  --md-sys-color-on-tertiary-container: #001f29;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+  --md-sys-color-background: #fbfdf9;
+  --md-sys-color-on-background: #191c1a;
+  --md-sys-color-surface: #fbfdf9;
+  --md-sys-color-on-surface: #191c1a;
+  --md-sys-color-surface-variant: #dbe5de;
+  --md-sys-color-on-surface-variant: #404944;
+  --md-sys-color-outline: #707974;
+  --md-sys-color-outline-variant: #bfc9c2;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-surface-tint: #006c4c;
+  --md-sys-color-inverse-surface: #2e312f;
+  --md-sys-color-inverse-on-surface: #f0f1ec;
+  --md-sys-color-inverse-primary: #6cdbac;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-surface-container-highest: #e1e3df;
+  --md-sys-color-surface-container-high: #e7e9e5;
+  --md-sys-color-surface-container: #edefeb;
+  --md-sys-color-surface-container-low: #f3f5f1;
+  --md-sys-color-surface-container-lowest: #ffffff;
+
+  /* Typography */
+  --md-sys-typescale-display-large: 400 57px/64px 'Outfit', sans-serif;
+  --md-sys-typescale-display-medium: 400 45px/52px 'Outfit', sans-serif;
+  --md-sys-typescale-display-small: 400 36px/44px 'Outfit', sans-serif;
+  --md-sys-typescale-headline-large: 400 32px/40px 'Outfit', sans-serif;
+  --md-sys-typescale-headline-medium: 400 28px/36px 'Outfit', sans-serif;
+  --md-sys-typescale-headline-small: 400 24px/32px 'Outfit', sans-serif;
+  --md-sys-typescale-title-large: 400 22px/28px 'Outfit', sans-serif;
+  --md-sys-typescale-title-medium: 500 16px/24px 'Outfit', sans-serif;
+  --md-sys-typescale-title-small: 500 14px/20px 'Outfit', sans-serif;
+  --md-sys-typescale-label-large: 500 14px/20px 'Outfit', sans-serif;
+  --md-sys-typescale-label-medium: 500 12px/16px 'Outfit', sans-serif;
+  --md-sys-typescale-label-small: 500 11px/16px 'Outfit', sans-serif;
+  --md-sys-typescale-body-large: 400 16px/24px 'Outfit', sans-serif;
+  --md-sys-typescale-body-medium: 400 14px/20px 'Outfit', sans-serif;
+  --md-sys-typescale-body-small: 400 12px/16px 'Outfit', sans-serif;
+
+  /* Expressive Shapes */
+  --shape-corner-extra-small: 4px;
+  --shape-corner-small: 8px;
+  --shape-corner-medium: 12px;
+  --shape-corner-large: 16px;
+  --shape-corner-extra-large: 28px;
+  --shape-corner-full: 999px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--md-sys-color-background);
+  color: var(--md-sys-color-on-background);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header {
+  padding: 16px;
+  text-align: center;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+/* Card Surface */
+.card-surface {
+  background-color: var(--md-sys-color-surface-container-low);
+  border-radius: var(--shape-corner-extra-large);
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15); /* Elevation 1 */
+  width: 100%;
+  max-width: 400px; /* Default for cards */
+  box-sizing: border-box;
+}
+
+/* Typography Helpers */
+.display-medium { font: var(--md-sys-typescale-display-medium); }
+.headline-small { font: var(--md-sys-typescale-headline-small); }
+.body-large { font: var(--md-sys-typescale-body-large); }
+.body-medium { font: var(--md-sys-typescale-body-medium); }
+.label-large { font: var(--md-sys-typescale-label-large); }
+
+.text-on-surface-variant { color: var(--md-sys-color-on-surface-variant); }
+.text-primary { color: var(--md-sys-color-primary); }
+
+/* Buttons */
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border: none;
+  border-radius: var(--shape-corner-full);
+  font: var(--md-sys-typescale-label-large);
+  text-decoration: none;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.primary-btn:hover {
+  box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.15); /* Elevation 2 */
+}
+
+.primary-btn:active {
+  transform: scale(0.98);
+}
+
+.secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  background-color: transparent;
+  color: var(--md-sys-color-primary);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--shape-corner-full);
+  font: var(--md-sys-typescale-label-large);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Google Sign In Button Specifics */
+.google-btn {
+  background-color: #ffffff;
+  color: #1f1f1f;
+  border: 1px solid #747775;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.google-btn:hover {
+  background-color: #f0f4f9; /* Google's hover state */
+  box-shadow: none;
+  border-color: #1f1f1f;
+}
+
+/* Layout Utilities */
+.gap-16 { gap: 16px; }
+.mt-16 { margin-top: 16px; }
+.mt-32 { margin-top: 32px; }
+.mb-24 { margin-bottom: 24px; }
+.mb-40 { margin-bottom: 40px; }
+.text-center { text-align: center; }
+.w-100 { width: 100%; }
+.flex-col { display: flex; flex-direction: column; }
+
+/* Admin Section specific (restoring legacy class support) */
+.admin h2 {
+    font: var(--md-sys-typescale-headline-medium);
+    margin-top: 0;
+    margin-bottom: 16px;
+}

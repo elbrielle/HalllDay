@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'dart:async'; // For Timer
 import 'package:web/web.dart' as web;
 import '../services/api_service.dart';
-import 'dart:html' as html; // For file upload
+import 'package:file_picker/file_picker.dart';
+import '../widgets/app_nav_drawer.dart';
+import '../widgets/admin_widgets.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -24,6 +26,8 @@ class _AdminScreenState extends State<AdminScreen> {
   late TextEditingController _slugCtrl;
   bool _autoPromoteQueue = false;
   bool _enableQueue = false;
+  bool _autoBanOverdue = false;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -33,10 +37,16 @@ class _AdminScreenState extends State<AdminScreen> {
     _overdueCtrl = TextEditingController();
     _slugCtrl = TextEditingController();
     _loadData();
+    // Auto-Refresh every 8 seconds
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => _loadData(silent: true),
+    );
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _roomCtrl.dispose();
     _capacityCtrl.dispose();
     _overdueCtrl.dispose();
@@ -44,7 +54,8 @@ class _AdminScreenState extends State<AdminScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     try {
       final data = await _api.getAdminStats();
       if (mounted) {
@@ -52,21 +63,23 @@ class _AdminScreenState extends State<AdminScreen> {
           _data = data;
           _loading = false;
 
-          // Init controllers
-          final settings = data['settings'] ?? {};
-          _roomCtrl.text = settings['room_name'] ?? 'Hall Pass';
-          _capacityCtrl.text = (settings['capacity'] ?? 1).toString();
-          _overdueCtrl.text = (settings['overdue_minutes'] ?? 10).toString();
+          if (!silent) {
+            final settings = data['settings'] ?? {};
+            _roomCtrl.text = settings['room_name'] ?? 'Hall Pass';
+            _capacityCtrl.text = (settings['capacity'] ?? 1).toString();
+            _overdueCtrl.text = (settings['overdue_minutes'] ?? 10).toString();
 
-          // Pre-populate slug if set
-          final user = data['user'] ?? {};
-          _slugCtrl.text = user['slug'] ?? '';
+            final user = data['user'] ?? {};
+            _slugCtrl.text = user['slug'] ?? '';
 
-          _autoPromoteQueue = settings['auto_promote_queue'] == true;
-          _enableQueue = settings['enable_queue'] == true;
+            _autoPromoteQueue = settings['auto_promote_queue'] == true;
+            _enableQueue = settings['enable_queue'] == true;
+            _autoBanOverdue = settings['auto_ban_overdue'] == true;
+          }
         });
       }
     } catch (e) {
+      if (mounted) setState(() => _loading = false);
       if (e.toString().contains('Unauthorized')) {
         web.window.location.href = '/admin/login';
       } else {
@@ -88,6 +101,7 @@ class _AdminScreenState extends State<AdminScreen> {
         'overdue_minutes': int.tryParse(_overdueCtrl.text) ?? 10,
         'auto_promote_queue': _autoPromoteQueue,
         'enable_queue': _enableQueue,
+        'auto_ban_overdue': _autoBanOverdue,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -142,44 +156,39 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _uploadRoster() async {
-    // Web file picker
-    final html.FileUploadInputElement uploadInput =
-        html.FileUploadInputElement();
-    uploadInput.accept = '.csv';
-    uploadInput.click();
+    try {
+      // Modern file picker (replaces dart:html)
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true, // Critical for web - gets bytes
+      );
 
-    uploadInput.onChange.listen((e) async {
-      final files = uploadInput.files;
-      if (files!.isNotEmpty) {
-        final file = files[0];
-        final reader = html.FileReader();
-        reader.readAsArrayBuffer(file);
-        reader.onLoadEnd.listen((e) async {
-          try {
-            final bytes = reader.result as List<int>;
-            final count = await _api.uploadRoster(bytes, file.name);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Uploaded $count students!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-              _loadData();
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Upload failed: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        });
+      if (result != null && result.files.first.bytes != null) {
+        final bytes = result.files.first.bytes!;
+        final name = result.files.first.name;
+
+        final count = await _api.uploadRoster(bytes, name);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Uploaded $count students!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _loadData();
+        }
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _clearRoster() async {
@@ -213,10 +222,10 @@ class _AdminScreenState extends State<AdminScreen> {
                 onPressed: () => Navigator.pop(context, false),
                 child: const Text('Cancel'),
               ),
-              TextButton(
+              FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Clear'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Clear Roster'),
               ),
             ],
           );
@@ -268,21 +277,19 @@ class _AdminScreenState extends State<AdminScreen> {
     final cur = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete History?'),
+        title: const Text('Clear History?'),
         content: const Text(
-          'Permanently delete all session history. This cannot be undone.',
+          'Permanently delete all session history logs. This cannot be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'DELETE',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete History'),
           ),
         ],
       ),
@@ -291,7 +298,131 @@ class _AdminScreenState extends State<AdminScreen> {
     if (cur == true) {
       try {
         await _api.deleteHistory();
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('History cleared.')));
+        }
         _loadData();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      }
+    }
+  }
+
+  Future<void> _endSessionForId(int id, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("End Session for $name?"),
+        content: const Text(
+          "This will mark the student as returned immediately.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("End Session"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.endSession(id);
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Session ended.')));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      }
+    }
+  }
+
+  Future<void> _removeFromQueue(String studentId, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Remove $name from Waitlist?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Remove"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.deleteFromQueue(studentId, ""); // Token not needed for admin
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Removed from waitlist.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      }
+    }
+  }
+
+  Future<void> _banStudent(String studentId, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Ban $name?"),
+        content: const Text(
+          "This will end their current session (if any) and prevent them from checking out in the future.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Ban Student"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.banStudent(studentId);
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Student banned.')));
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -304,8 +435,9 @@ class _AdminScreenState extends State<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     final user = _data?['user'] ?? {};
     final stats = _data ?? {};
@@ -316,6 +448,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBFDF8), // Material 3 surface
+      drawer: const AppNavDrawer(currentRoute: '/admin'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Center(
@@ -367,17 +500,60 @@ class _AdminScreenState extends State<AdminScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 16),
+                // Launch Actions
+                Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "Launch:",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      OutlinedButton.icon(
+                        onPressed: urls['kiosk']?.toString().isNotEmpty == true
+                            ? () => web.window.open(urls['kiosk'], '_blank')
+                            : null,
+                        icon: const Icon(Icons.devices_other),
+                        label: const Text("Kiosk"),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed:
+                            urls['display']?.toString().isNotEmpty == true
+                            ? () => web.window.open(urls['display'], '_blank')
+                            : null,
+                        icon: const Icon(Icons.tv),
+                        label: const Text("Display"),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
 
                 // Quick Stats & Suspend
                 Row(
                   children: [
-                    _StatsChip(
+                    StatsChip(
                       "Open Sessions",
                       stats['active_sessions_count'].toString(),
                     ),
                     const SizedBox(width: 12),
-                    _StatsChip(
+                    StatsChip(
                       "Total Sessions",
                       stats['total_sessions'].toString(),
                     ),
@@ -399,8 +575,244 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 const SizedBox(height: 32),
 
+                // LIVE ACTIVITY (Active Sessions & Waitlist)
+                const SectionHeader(
+                  icon: Icons.access_time_filled,
+                  title: "Live Activity",
+                ),
+                Wrap(
+                  spacing: 24,
+                  runSpacing: 24,
+                  children: [
+                    // Active Sessions
+                    Container(
+                      width: 480,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2ECE4),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Active Sessions (${stats['active_sessions_count'] ?? 0})",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          if ((_data?['active_sessions'] as List?)?.isEmpty ??
+                              true)
+                            const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text(
+                                "No active sessions.",
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            )
+                          else
+                            ...(_data!['active_sessions'] as List).map(
+                              (s) => Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            s['name'] ?? 'Unknown',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          Text(
+                                            "Started: ${s['start_ts']?.split('T')[1]?.split('.')[0]}",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.stop_circle_outlined,
+                                        color: Colors.red,
+                                      ),
+                                      tooltip: "End Session",
+                                      onPressed: () =>
+                                          _endSessionForId(s['id'], s['name']),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.block,
+                                        color: Colors.red,
+                                      ),
+                                      tooltip: "Ban Student",
+                                      onPressed: () => _banStudent(
+                                        s['student_id'],
+                                        s['name'],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    // Waitlist
+                    Container(
+                      width: 480,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0), // Orange tint
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Waitlist (${(_data?['queue_list'] as List?)?.length ?? 0})",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          if ((_data?['queue_list'] as List?)?.isEmpty ?? true)
+                            const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text(
+                                "Waitlist is empty.",
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            )
+                          else
+                            ReorderableListView(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              onReorder: (oldIndex, newIndex) async {
+                                if (oldIndex < newIndex) {
+                                  newIndex -= 1;
+                                }
+                                final queue = List<Map<String, dynamic>>.from(
+                                  _data!['queue_list'],
+                                );
+                                final item = queue.removeAt(oldIndex);
+                                queue.insert(newIndex, item);
+
+                                // Optimistic update
+                                setState(() {
+                                  _data!['queue_list'] = queue;
+                                });
+
+                                // Sync API
+                                final ids = queue
+                                    .map((e) => e['student_id'] as String)
+                                    .toList();
+                                try {
+                                  await _api.reorderQueue(ids);
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Reorder failed: $e'),
+                                      ),
+                                    );
+                                  }
+                                  _loadData(); // Revert on failure
+                                }
+                              },
+                              children: [
+                                for (
+                                  int i = 0;
+                                  i < (_data!['queue_list'] as List).length;
+                                  i++
+                                )
+                                  Container(
+                                    key: ValueKey(
+                                      (_data!['queue_list']
+                                          as List)[i]['student_id'],
+                                    ),
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.orange[200]!,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.drag_handle,
+                                          color: Colors.grey,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundColor: Colors.orange,
+                                          child: Text(
+                                            "${i + 1}",
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            (_data!['queue_list']
+                                                    as List)[i]['name'] ??
+                                                'Unknown',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.close,
+                                            color: Colors.grey,
+                                          ),
+                                          tooltip: "Remove from Waitlist",
+                                          onPressed: () => _removeFromQueue(
+                                            (_data!['queue_list']
+                                                as List)[i]['student_id'],
+                                            (_data!['queue_list']
+                                                as List)[i]['name'],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
                 // Share Section
-                const _SectionHeader(
+                const SectionHeader(
                   icon: Icons.share,
                   title: "Share Your Kiosk",
                 ),
@@ -415,11 +827,11 @@ class _AdminScreenState extends State<AdminScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: _CopyField("Kiosk URL", urls['kiosk'] ?? ''),
+                            child: CopyField("Kiosk URL", urls['kiosk'] ?? ''),
                           ),
                           const SizedBox(width: 24),
                           Expanded(
-                            child: _CopyField(
+                            child: CopyField(
                               "Display URL",
                               urls['display'] ?? '',
                             ),
@@ -453,7 +865,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Customize URL
-                const _SectionHeader(title: "Customize URL"),
+                const SectionHeader(title: "Customize URL"),
                 Row(
                   children: [
                     Expanded(
@@ -481,7 +893,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Roster Management
-                _SectionHeader(
+                SectionHeader(
                   title: "Roster Management",
                   color: Colors.green[800],
                 ),
@@ -522,12 +934,23 @@ class _AdminScreenState extends State<AdminScreen> {
                           ),
                           const SizedBox(width: 16),
                           OutlinedButton.icon(
+                            onPressed: () {
+                              web.window.open('/api/roster/template', '_blank');
+                            },
+                            icon: const Icon(Icons.download),
+                            label: const Text("Template"),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green[800],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          OutlinedButton.icon(
                             onPressed: () => showDialog(
                               context: context,
-                              builder: (c) => _RosterManager(api: _api),
+                              builder: (c) => RosterManager(api: _api),
                             ),
                             icon: const Icon(Icons.list),
-                            label: const Text("Manage Bans & View List"),
+                            label: const Text("Manage Roster & Bans"),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.green[800],
                             ),
@@ -538,14 +961,14 @@ class _AdminScreenState extends State<AdminScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: _StatsCard(
+                            child: StatsCard(
                               "${stats['roster_count']}",
                               "Database Roster (Encrypted)",
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: _StatsCard(
+                            child: StatsCard(
                               "${stats['memory_roster_count']}",
                               "Display Cache",
                             ),
@@ -553,13 +976,28 @@ class _AdminScreenState extends State<AdminScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      OutlinedButton(
-                        onPressed: _clearRoster,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                        ),
-                        child: const Text("Clear All Roster Data"),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              web.window.open('/api/roster/export', '_blank');
+                            },
+                            icon: const Icon(Icons.download),
+                            label: const Text("Export Roster"),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green[800],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          OutlinedButton(
+                            onPressed: _clearRoster,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                            ),
+                            child: const Text("Clear All Roster Data"),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -567,7 +1005,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Settings
-                const _SectionHeader(title: "Settings"),
+                const SectionHeader(title: "Settings"),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -652,96 +1090,20 @@ class _AdminScreenState extends State<AdminScreen> {
                           ),
                         ],
 
-                        // Waitlist Management (Nested in Settings)
-                        if (_enableQueue &&
-                            _data?['queue_list'] != null &&
-                            (_data!['queue_list'] as List).isNotEmpty) ...[
-                          const Padding(
-                            padding: EdgeInsets.only(left: 16.0, top: 16.0),
-                            child: Divider(),
+                        const Divider(),
+                        CheckboxListTile(
+                          title: const Text("Auto-Ban Overdue Students"),
+                          subtitle: const Text(
+                            "Automatically ban students if they exceed the overdue limit.",
                           ),
-                          const Padding(
-                            padding: EdgeInsets.only(left: 16.0, bottom: 8.0),
-                            child: Text(
-                              "Current Waitlist",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange,
-                              ),
-                            ),
-                          ),
-                          Card(
-                            elevation: 0,
-                            color: Colors.orange.shade50,
-                            margin: const EdgeInsets.only(left: 16.0),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: Colors.orange.shade200),
-                            ),
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: (_data!['queue_list'] as List).length,
-                              separatorBuilder: (c, i) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final student = _data!['queue_list'][index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(
-                                    Icons.person,
-                                    color: Colors.orange,
-                                    size: 20,
-                                  ),
-                                  title: Text(
-                                    student['name'] ?? "Unknown",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.close,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    onPressed: () async {
-                                      final cid = student['student_id'];
-                                      if (cid == null) return;
-                                      if (await showDialog(
-                                            context: context,
-                                            builder: (c) => AlertDialog(
-                                              title: const Text("Remove?"),
-                                              content: Text(
-                                                "Remove ${student['name']}?",
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(c, false),
-                                                  child: const Text("Cancel"),
-                                                ),
-                                                FilledButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(c, true),
-                                                  child: const Text("Remove"),
-                                                ),
-                                              ],
-                                            ),
-                                          ) ==
-                                          true) {
-                                        ApiService()
-                                            .deleteFromQueue(cid, "")
-                                            .then((_) => _loadData());
-                                      }
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                          value: _autoBanOverdue,
+                          onChanged: (val) =>
+                              setState(() => _autoBanOverdue = val ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: Colors.red,
+                        ),
+
                         const SizedBox(height: 24),
                         FilledButton(
                           onPressed: _updateSettings,
@@ -758,7 +1120,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 32),
 
                 // Insights
-                const _SectionHeader(title: "Weekly Insights"),
+                const SectionHeader(title: "Weekly Insights"),
                 const Text(
                   '"Anonymous" entries appear when IDs are scanned without a roster.',
                   style: TextStyle(color: Colors.grey),
@@ -769,14 +1131,14 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _InsightCard(
+                        child: InsightCard(
                           "Top Users",
                           insights['top_students'] ?? [],
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: _InsightCard(
+                        child: InsightCard(
                           "Most Overdue",
                           insights['most_overdue'] ?? [],
                           isRed: true,
@@ -790,7 +1152,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: TextButton.icon(
                     onPressed: () => showDialog(
                       context: context,
-                      builder: (c) => _PassLogsDialog(api: _api),
+                      builder: (c) => PassLogsDialog(api: _api),
                     ),
                     icon: const Icon(Icons.history),
                     label: const Text("View Full Pass Logs"),
@@ -799,63 +1161,8 @@ class _AdminScreenState extends State<AdminScreen> {
 
                 const SizedBox(height: 32),
 
-                // System Controls (Auto-Ban)
-                _SectionHeader(title: "Auto-Ban", color: Colors.green[800]),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2ECE4),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border(
-                      left: BorderSide(color: Colors.red[700]!, width: 4),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: settings['auto_ban_overdue'] == true,
-                            onChanged: (val) async {
-                              // Optimistic update
-                              setState(() {
-                                settings['auto_ban_overdue'] = val;
-                              });
-                              try {
-                                await _api.updateSettings({
-                                  'auto_ban_overdue': val,
-                                });
-                                // Success - background reload to confirm sync
-                                _loadData();
-                              } catch (e) {
-                                // Revert on failure
-                                setState(() {
-                                  settings['auto_ban_overdue'] = !val!;
-                                });
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                          ),
-                          const Text(
-                            "Auto-Ban Enabled",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
                 const SizedBox(height: 32),
-                const _SectionHeader(
+                const SectionHeader(
                   title: "System Status",
                   icon: Icons.monitor_heart,
                 ),
@@ -903,7 +1210,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
 
                 const SizedBox(height: 32),
-                const _SectionHeader(title: "System Controls"),
+                const SectionHeader(title: "System Controls"),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -949,480 +1256,6 @@ class _AdminScreenState extends State<AdminScreen> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final IconData? icon;
-  final Color? color;
-  const _SectionHeader({required this.title, this.icon, this.color});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          if (icon != null) ...[
-            Icon(icon, color: color ?? Colors.green[800]),
-            const SizedBox(width: 8),
-          ],
-          Text(
-            title,
-            style: TextStyle(fontSize: 24, color: color ?? Colors.green[800]),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsChip extends StatelessWidget {
-  final String label;
-  final String value;
-  const _StatsChip(this.label, this.value);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2ECE4),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Text("$label:", style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 4),
-          Text(value),
-        ],
-      ),
-    );
-  }
-}
-
-class _CopyField extends StatelessWidget {
-  final String label;
-  final String value;
-  const _CopyField(this.label, this.value);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.monitor, size: 16),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(color: Colors.grey),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Copied!')));
-            },
-            icon: const Icon(Icons.copy, size: 16),
-            label: const Text("Copy"),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFF2F2F2),
-              foregroundColor: Colors.black,
-              elevation: 0,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsCard extends StatelessWidget {
-  final String value;
-  final String label;
-  const _StatsCard(this.value, this.label);
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: TextStyle(fontSize: 32, color: Colors.green[800])),
-          Text(label, style: const TextStyle(color: Colors.black)),
-        ],
-      ),
-    );
-  }
-}
-
-class _InsightCard extends StatelessWidget {
-  final String title;
-  final List<dynamic> items;
-  final bool isRed;
-  const _InsightCard(this.title, this.items, {this.isRed = false});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2ECE4),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (ctx, i) {
-                final item = items[i];
-                final maxVal = (items.isNotEmpty)
-                    ? items[0]['count'] as int
-                    : 1;
-                final val = item['count'] as int;
-                final pct = val / maxVal;
-
-                return Row(
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      child: Text(
-                        item['name'],
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Container(height: 12, color: Colors.grey[300]),
-                          FractionallySizedBox(
-                            widthFactor: pct,
-                            child: Container(
-                              height: 12,
-                              color: isRed ? Colors.red : Colors.green[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text("$val", style: const TextStyle(fontSize: 12)),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RosterManager extends StatefulWidget {
-  final ApiService api;
-  const _RosterManager({required this.api});
-
-  @override
-  State<_RosterManager> createState() => _RosterManagerState();
-}
-
-class _RosterManagerState extends State<_RosterManager> {
-  bool _loading = true;
-  List<Map<String, dynamic>> _roster = [];
-  List<Map<String, dynamic>> _filtered = [];
-  final TextEditingController _searchCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final data = await widget.api.fetchRoster();
-      setState(() {
-        _roster = data;
-        _filtered = data;
-        _loading = false;
-      });
-      _filter();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  void _filter() {
-    final q = _searchCtrl.text.toLowerCase();
-    setState(() {
-      _filtered = _roster.where((s) {
-        final name = (s['name'] ?? '').toString().toLowerCase();
-        final id = (s['student_id'] ?? '').toString().toLowerCase();
-        return name.contains(q) || id.contains(q);
-      }).toList();
-    });
-  }
-
-  Future<void> _toggleBan(int index, bool val) async {
-    final s = _filtered[index];
-    // Optimistic
-    setState(() {
-      s['banned'] = val;
-    });
-
-    try {
-      await widget.api.toggleBan(s['name_hash'], val);
-    } catch (e) {
-      // Revert
-      setState(() {
-        s['banned'] = !val;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 600,
-        height: 700,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  "Manage Roster & Bans",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _searchCtrl,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: "Search by Name or ID...",
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (_) => _filter(),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _filtered.isEmpty
-                  ? const Center(child: Text("No students found."))
-                  : ListView.separated(
-                      itemCount: _filtered.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (ctx, i) {
-                        final s = _filtered[i];
-                        final id = s['student_id'] ?? 'Hidden';
-                        final isBanned = s['banned'] == true;
-
-                        return ListTile(
-                          title: Text(s['name'] ?? 'Unknown'),
-                          subtitle: Text("ID: $id"),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                isBanned ? "BANNED" : "Active",
-                                style: TextStyle(
-                                  color: isBanned ? Colors.red : Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Switch(
-                                value: isBanned,
-                                activeColor: Colors.red,
-                                onChanged: (v) => _toggleBan(i, v),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PassLogsDialog extends StatefulWidget {
-  final ApiService api;
-  const _PassLogsDialog({required this.api});
-
-  @override
-  State<_PassLogsDialog> createState() => _PassLogsDialogState();
-}
-
-class _PassLogsDialogState extends State<_PassLogsDialog> {
-  bool _loading = true;
-  List<Map<String, dynamic>> _logs = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final data = await widget.api.getPassLogs();
-      if (mounted) {
-        setState(() {
-          _logs = data;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 800,
-        height: 700,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Text(
-                  "Recent Pass Activity",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    web.window.open('/api/admin/logs/export', '_blank');
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text("Export CSV"),
-                ),
-                const SizedBox(width: 16),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _logs.isEmpty
-                  ? const Center(child: Text("No logs found."))
-                  : SingleChildScrollView(
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text("Student")),
-                          DataColumn(label: Text("Start Time")),
-                          DataColumn(label: Text("Duration")),
-                          DataColumn(label: Text("Status")),
-                        ],
-                        rows: _logs.map((log) {
-                          final status = log['status'] ?? 'active';
-                          final isOverdue = status == 'overdue';
-                          final isEnded = status == 'completed';
-
-                          Color color = Colors.black;
-                          if (isOverdue)
-                            color = Colors.red;
-                          else if (!isEnded)
-                            color = Colors.green[800]!;
-
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                Text(
-                                  log['name'] ?? 'Unknown',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Text(
-                                  log['start']?.split('T')[1].split('.')[0] ??
-                                      '',
-                                ),
-                              ),
-                              DataCell(Text("${log['duration_minutes']} min")),
-                              DataCell(
-                                Text(
-                                  status.toUpperCase(),
-                                  style: TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-            ),
-          ],
         ),
       ),
     );

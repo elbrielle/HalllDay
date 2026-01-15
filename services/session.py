@@ -62,4 +62,17 @@ class SessionService:
             return query.count()
         except Exception:
             return 0
+    
+    def clear_user_history(self, user_id: Optional[int]) -> bool:
+        """Clear session history for a specific user"""
+        try:
+            if user_id is not None:
+                self.Session.query.filter_by(user_id=user_id).delete()
+            else:
+                self.Session.query.delete()
+            self.db.session.commit()
+            return True
+        except Exception:
+            self.db.session.rollback()
+            return False
 

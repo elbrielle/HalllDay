@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:web/web.dart' as web;
-import 'dart:ui'; // For ImageFilter
+import '../widgets/app_nav_drawer.dart';
+import 'dart:ui' as ui; // ignore: library_prefixes
+import 'dart:ui_web' as ui_web;
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -12,6 +15,28 @@ class LandingScreen extends StatefulWidget {
 class _LandingScreenState extends State<LandingScreen> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _faqKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    // Register YouTube view factory for Web
+    // ignore: undefined_prefixed_name
+    ui_web.platformViewRegistry.registerViewFactory('youtube-video', (
+      int viewId,
+    ) {
+      final iframe =
+          web.document.createElement('iframe') as web.HTMLIFrameElement;
+      iframe.src =
+          'https://www.youtube.com/embed/L8NvFc-F5EU?si=Xu21FymPx2G17ppY';
+      iframe.style.border = 'none';
+      iframe.setAttribute(
+        'allow',
+        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+      );
+      iframe.setAttribute('allowfullscreen', 'true');
+      return iframe;
+    });
+  }
 
   void _scrollToFAQ() {
     final context = _faqKey.currentContext;
@@ -32,8 +57,11 @@ class _LandingScreenState extends State<LandingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       backgroundColor: Colors.white,
+      drawer: const AppNavDrawer(currentRoute: '/'),
       body: Stack(
         children: [
           // Background Blobs
@@ -75,7 +103,7 @@ class _LandingScreenState extends State<LandingScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.green.shade100,
+                        color: cs.primary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -83,14 +111,14 @@ class _LandingScreenState extends State<LandingScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green.shade800,
+                          color: cs.primary,
                         ),
                       ),
                     ),
                   ],
                 ),
                 centerTitle: true,
-                backgroundColor: Colors.white.withOpacity(0.5),
+                backgroundColor: Colors.white.withValues(alpha: 0.5),
                 surfaceTintColor: Colors.transparent,
                 actions: [
                   Padding(
@@ -119,133 +147,186 @@ class _LandingScreenState extends State<LandingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // Hero Section
-                      const Icon(
-                        Icons.school_rounded,
-                        size: 100,
-                        color: Colors.black87,
-                      ),
-                      const SizedBox(height: 32),
-                      const Text(
-                        "The Hall Pass,\nReimagined.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 56,
-                          fontWeight: FontWeight.w900,
-                          height: 1.0,
-                          letterSpacing: -2,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: const Text(
-                          "Stop using paper logs and gross wooden blocks. Switch to a digital system that tracks time, manages queues, and keeps students accountable.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 20,
-                            color: Colors.black54,
-                            height: 1.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 48),
+                      Column(
+                            children: [
+                              // Prefer a real logo if it exists at the server root.
+                              // Bundled as a Flutter asset for reliability (web + mobile).
+                              // SVG Logo for perfect scaling
+                              Image.asset(
+                                    'assets/brand/logo.png',
+                                    height: 100, // Adjusted height for balance
+                                    fit: BoxFit
+                                        .contain, // Ensure it's never cut off
+                                  )
+                                  .animate(
+                                    onPlay: (controller) =>
+                                        controller.repeat(reverse: true),
+                                  )
+                                  .moveY(
+                                    begin: 0,
+                                    end: -10,
+                                    duration: 3.seconds,
+                                    curve: Curves.easeInOut,
+                                  ),
+                              const SizedBox(height: 28),
+                              Text(
+                                "Fixing the part of classroom management everyone hates dealing with.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 56,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.05,
+                                  letterSpacing: -2.0,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 600,
+                                ),
+                                child: const Text(
+                                  "Track time, manage queues, and see who’s out.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    color: Colors.black54,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 48),
 
-                      // CTA Buttons
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          FilledButton(
-                            onPressed: () {
-                              web.window.location.href = '/admin/login';
-                            },
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.black,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 24,
+                              // CTA Buttons (clear hierarchy)
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 12,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: () {
+                                      web.window.location.href = '/admin/login';
+                                    },
+                                    icon: const Icon(Icons.dashboard_rounded),
+                                    label: const Text("Teacher Dashboard"),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: cs.primary,
+                                      foregroundColor: cs.onPrimary,
+                                      textStyle: const TextStyle(fontSize: 18),
+                                      elevation: 2,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: _scrollToFAQ,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.black87,
+                                      textStyle: const TextStyle(fontSize: 18),
+                                    ),
+                                    child: const Text("How it works"),
+                                  ),
+                                ],
                               ),
-                              textStyle: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            child: const Text("Teacher Dashboard"),
+                            ],
+                          )
+                          .animate()
+                          .fadeIn(duration: 520.ms, curve: Curves.easeOutCubic)
+                          .slideY(
+                            begin: 0.06,
+                            end: 0,
+                            duration: 520.ms,
+                            curve: Curves.easeOutCubic,
                           ),
-                          OutlinedButton(
-                            onPressed: _scrollToFAQ,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.black87,
-                              side: const BorderSide(
-                                color: Colors.black12,
-                                width: 2,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 24,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+
+                      const SizedBox(height: 64),
+
+                      // Video Embed
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 800),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 30,
+                                  offset: Offset(0, 15),
+                                ),
+                              ],
                             ),
-                            child: const Text("How It Works"),
+                            clipBehavior: Clip.antiAlias,
+                            child: const AspectRatio(
+                              aspectRatio: 16 / 9,
+                              child: HtmlElementView(viewType: 'youtube-video'),
+                            ),
                           ),
-                        ],
+                        ),
                       ),
 
                       const SizedBox(height: 96),
 
-                      // Find Kiosk Card
-                      Container(
-                        width: 450,
-                        padding: const EdgeInsets.all(32),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                          border: Border.all(
-                            color: Colors.black.withOpacity(0.05),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              "Find Your Kiosk",
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.5,
+                      // Room Entry Card (more sculptural + accent for focus/action)
+                      ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            child: Container(
+                              padding: const EdgeInsets.all(32),
+                              decoration: BoxDecoration(
+                                color: cs.surface,
+                                borderRadius: BorderRadius.circular(32),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 28,
+                                    offset: const Offset(0, 14),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: cs.primary.withValues(alpha: 0.08),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    "Enter your room",
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    "Type the room code your teacher gives you.",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.black54,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  _TokenInput(accent: cs.primary),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Enter the room code provided by your teacher.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                            const SizedBox(height: 24),
-                            _TokenInput(),
-                          ],
-                        ),
-                      ),
+                          )
+                          .animate()
+                          .fadeIn(delay: 220.ms, duration: 520.ms)
+                          .slideY(
+                            begin: 0.08,
+                            end: 0,
+                            delay: 220.ms,
+                            duration: 520.ms,
+                            curve: Curves.easeOutCubic,
+                          ),
 
                       const SizedBox(height: 128),
 
                       // FAQ Section
                       Container(key: _faqKey),
                       const Text(
-                        "Common Questions",
+                        "Before you ask",
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w900,
@@ -257,21 +338,23 @@ class _LandingScreenState extends State<LandingScreen> {
                         constraints: const BoxConstraints(maxWidth: 800),
                         child: Column(
                           children: [
-                            _buildFAQItem(
-                              "How does it work?",
-                              "Teachers create a room code. Students scan a QR code (or type their ID) at a kiosk device (any tablet/laptop) to check out. The system tracks the time.",
+                            _FAQItem(
+                              icon: Icons.app_registration_rounded,
+                              accent: cs.primary,
+                              "1. Set up Admin",
+                              "Sign in as a teacher. Create your room slug (e.g. 'mr-smith'), set your rules, and upload your roster if you want.",
                             ),
-                            _buildFAQItem(
-                              "What hardware do I need?",
-                              "Just a computer or tablet for the kiosk! You can use a barcode scanner (\$20 on Amazon) for faster check-ins, or students can just type their ID.",
+                            _FAQItem(
+                              icon: Icons.devices_other_rounded,
+                              accent: cs.secondary,
+                              "2. Launch Kiosk",
+                              "Open the Kiosk URL (/kiosk/your-slug) on a dedicated device (iPad, Chromebook). Students use this to scan or type their ID to leave.",
                             ),
-                            _buildFAQItem(
-                              "Is it FERPA compliant?",
-                              "Yes. We do not store sensitive records permanently. Roster names are encrypted, and session history can be cleared at any time.",
-                            ),
-                            _buildFAQItem(
-                              " Does it stop students from leaving?",
-                              "It discourages long absences by displaying a timer and 'Overdue' warnings. It also lets you see who is gone instantly.",
+                            _FAQItem(
+                              icon: Icons.tv_rounded,
+                              accent: cs.tertiary,
+                              "3. Launch Display (Optional)",
+                              "Open the Display URL (/display/your-slug) on your projector or a second screen. This shows the live list of who is out and the waitlist.",
                             ),
                           ],
                         ),
@@ -281,7 +364,8 @@ class _LandingScreenState extends State<LandingScreen> {
                       const Divider(),
                       const SizedBox(height: 24),
                       const Text(
-                        "© 2025 IDK Can You? • Built for modern schools.",
+                        "© 2025 IDK Can You? • Elisha Lucero",
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey,
                           fontWeight: FontWeight.w500,
@@ -292,35 +376,6 @@ class _LandingScreenState extends State<LandingScreen> {
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFAQItem(String question, String answer) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: ExpansionTile(
-        shape: const Border(), // Remove divider
-        title: Text(
-          question,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        children: [
-          Text(
-            answer,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 1.5,
-              color: Colors.black87,
-            ),
           ),
         ],
       ),
@@ -340,16 +395,16 @@ class _BlurBlob extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.4),
+        color: color.withValues(alpha: 0.4),
         shape: BoxShape.circle,
       ),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+        filter: ui.ImageFilter.blur(sigmaX: 60, sigmaY: 60),
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: color.withOpacity(
-              0.0,
+            color: color.withValues(
+              alpha: 0.0,
             ), // Transparent container to clip blur?
           ),
         ),
@@ -359,6 +414,10 @@ class _BlurBlob extends StatelessWidget {
 }
 
 class _TokenInput extends StatefulWidget {
+  final Color accent;
+
+  const _TokenInput({required this.accent});
+
   @override
   State<_TokenInput> createState() => _TokenInputState();
 }
@@ -374,6 +433,12 @@ class _TokenInputState extends State<_TokenInput> {
   }
 
   @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Row(
       children: [
@@ -381,7 +446,7 @@ class _TokenInputState extends State<_TokenInput> {
           child: TextField(
             controller: _ctrl,
             decoration: InputDecoration(
-              hintText: "e.g. room-101",
+              hintText: "e.g. 101 or B-204",
               hintStyle: TextStyle(color: Colors.grey.shade400),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -399,18 +464,194 @@ class _TokenInputState extends State<_TokenInput> {
           ),
         ),
         const SizedBox(width: 12),
-        FilledButton(
+        _PressableIconButton(
           onPressed: _go,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.all(22),
-            backgroundColor: Colors.black,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Icon(Icons.arrow_forward),
+          backgroundColor: widget.accent,
+          foregroundColor: Colors.white,
+          icon: Icons.arrow_forward_rounded,
         ),
       ],
+    );
+  }
+}
+
+class _FAQItem extends StatefulWidget {
+  final String question;
+  final String answer;
+  final Color accent;
+  final IconData icon;
+
+  const _FAQItem(
+    this.question,
+    this.answer, {
+    required this.accent,
+    required this.icon,
+  });
+
+  @override
+  State<_FAQItem> createState() => _FAQItemState();
+}
+
+class _FAQItemState extends State<_FAQItem> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _open ? widget.accent.withValues(alpha: 0.22) : Colors.black12,
+          width: _open ? 1.5 : 1,
+        ),
+        boxShadow: [
+          if (_open)
+            BoxShadow(
+              color: widget.accent.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(widget.icon, color: widget.accent, size: 20),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        widget.question,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AnimatedRotation(
+                      turns: _open ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        Icons.expand_more_rounded,
+                        color: _open
+                            ? widget.accent.withValues(alpha: 0.9)
+                            : Colors.black45,
+                      ),
+                    ),
+                  ],
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: _open
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Animate(
+                            effects: [
+                              FadeEffect(
+                                duration: 220.ms,
+                                curve: Curves.easeOutCubic,
+                              ),
+                              SlideEffect(
+                                duration: 220.ms,
+                                curve: Curves.easeOutCubic,
+                                begin: const Offset(0, 0.02),
+                                end: Offset.zero,
+                              ),
+                            ],
+                            child: Text(
+                              widget.answer,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                height: 1.5,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PressableIconButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final IconData icon;
+
+  const _PressableIconButton({
+    required this.onPressed,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.icon,
+  });
+
+  @override
+  State<_PressableIconButton> createState() => _PressableIconButtonState();
+}
+
+class _PressableIconButtonState extends State<_PressableIconButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onPressed,
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: widget.backgroundColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              if (!_pressed)
+                BoxShadow(
+                  color: widget.backgroundColor.withValues(alpha: 0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+            ],
+          ),
+
+          child: Icon(widget.icon, color: widget.foregroundColor),
+        ),
+      ),
     );
   }
 }

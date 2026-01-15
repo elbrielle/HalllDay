@@ -19,14 +19,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const brandSeed = Color(0xFF00C853); // Brand accent (used intentionally)
+
     return MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => StatusProvider())],
       child: MaterialApp(
         title: 'IDK Can You?',
         theme: ThemeData(
-          primarySwatch: Colors.green,
           useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: brandSeed,
+            brightness: Brightness.light,
+          ),
           fontFamily: 'Inter',
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+              textStyle: const TextStyle(fontWeight: FontWeight.w700),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(
+              textStyle: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+              textStyle: const TextStyle(fontWeight: FontWeight.w700),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
           snackBarTheme: SnackBarThemeData(
             behavior: SnackBarBehavior.floating,
             backgroundColor: Colors.grey[900],

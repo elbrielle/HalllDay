@@ -34,7 +34,8 @@ class BubbleModel {
   String timerText = '';
   bool isOverdue = false;
 
-  DateTime? sessionStart;
+  // Session reference for timer calculation
+  Session? _activeSession;
 
   BubbleModel({
     required this.id,
@@ -49,18 +50,18 @@ class BubbleModel {
     rotateSpring.set(0.0);
   }
 
-  void update(double dt) {
+  /// Update physics and timer display
+  /// [localSecondsSincePoll] - seconds elapsed since last server data received
+  void update(double dt, {int localSecondsSincePoll = 0}) {
     xSpring.update(dt);
     ySpring.update(dt);
     scaleSpring.update(dt);
     rotateSpring.update(dt);
 
-    // Update Timer locally if active
-    if (type == BubbleType.used && sessionStart != null) {
-      final int elapsed = DateTime.now().difference(sessionStart!).inSeconds;
-      final int mins = (elapsed / 60).floor();
-      final int secs = elapsed % 60;
-      timerText = "$mins:${secs.toString().padLeft(2, '0')}";
+    // Update timer: server elapsed + local seconds since poll
+    // This is device-clock-independent (only measures local deltas)
+    if (type == BubbleType.used && _activeSession != null) {
+      timerText = _activeSession!.getCurrentTimerText(localSecondsSincePoll);
     }
   }
 
@@ -87,38 +88,26 @@ class BubbleModel {
     // Update Content Data
     if (newType == BubbleType.used && sessionData != null) {
       name = sessionData.name;
-      // Sync stats immediately
-      // Snap to nearest second to sync timer ticks across devices/passes
-      final rawStart = sessionData.start;
-      sessionStart = rawStart.subtract(
-        Duration(
-          milliseconds: rawStart.millisecond,
-          microseconds: rawStart.microsecond,
-        ),
-      );
-
       isOverdue = sessionData.overdue;
-
-      // Update text immediately
-      final int elapsed = DateTime.now().difference(sessionStart!).inSeconds;
-      final int mins = (elapsed / 60).floor();
-      final int secs = elapsed % 60;
-      timerText = "$mins:${secs.toString().padLeft(2, '0')}";
+      _activeSession = sessionData;
+      timerText = sessionData.getCurrentTimerText(
+        0,
+      ); // Will be updated next frame
     } else if (newType == BubbleType.banned) {
       name = "BANNED";
       timerText = "";
       isOverdue = true;
-      sessionStart = null;
+      _activeSession = null;
     } else if (newType == BubbleType.suspended) {
       name = "SUSPENDED";
       timerText = "";
       isOverdue = true;
-      sessionStart = null;
+      _activeSession = null;
     } else {
       name = "Scan ID";
       timerText = "";
       isOverdue = false;
-      sessionStart = null;
+      _activeSession = null;
     }
   }
 }
@@ -127,14 +116,22 @@ class BubbleModel {
 class BubbleSystem {
   List<BubbleModel> bubbles = [];
 
-  void update(double dt) {
+  /// Update physics and timer display (called at 60fps by Ticker)
+  void update(double dt, {required int Function() getLocalSecondsSincePoll}) {
+    final int currentSeconds = getLocalSecondsSincePoll();
     for (var b in bubbles) {
-      b.update(dt);
+      b.update(dt, localSecondsSincePoll: currentSeconds);
+    }
+  }
+
+  /// Update timer text only (without physics) - for throttled tab fallback
+  void updateTimersOnly(int localSecondsSincePoll) {
+    for (var b in bubbles) {
+      b.update(0, localSecondsSincePoll: localSecondsSincePoll);
     }
   }
 
   // Viewport size needed for aspect ratio calculations
-  // Default to 16:9 landscape if unknown
   Size _viewport = const Size(1920, 1080);
 
   void updateViewport(Size size) {
@@ -181,7 +178,7 @@ class BubbleSystem {
 
     final List<Map<String, double>> layout = getLayout(totalBubbles);
 
-    // Sync Used Sessions
+    // Sync Used Sessions (timer handled in update loop with fresh time)
     for (int i = 0; i < usedCount; i++) {
       final pos = layout[i];
       bubbles[i].settarget(

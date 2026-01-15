@@ -12,6 +12,18 @@ class StatusProvider with ChangeNotifier {
   String? _error;
   String? _token;
   Timer? _pollTimer;
+  Timer? _uiTickTimer;
+
+  // Track consecutive failures to detect offline state
+  int _failureCount = 0;
+  static const int _maxFailuresBeforeOffline = 3;
+
+  // Monotonic time tracking using Stopwatch
+  // Unlike DateTime, Stopwatch uses system uptime which is:
+  // - Immune to device clock changes
+  // - Immune to timezone changes
+  // - Consistent across all devices
+  final Stopwatch _pollStopwatch = Stopwatch();
 
   // Getters
   KioskStatus? get status => _status;
@@ -19,21 +31,61 @@ class StatusProvider with ChangeNotifier {
   String? get error => _error;
   bool get isConnected => _error == null;
 
+  /// Get the number of seconds elapsed since last server poll
+  /// Uses Stopwatch (monotonic time) for reliability
+  int get localSecondsSincePoll {
+    return _pollStopwatch.elapsed.inSeconds;
+  }
+
   // Initialize with token (e.g., from URL path)
   void init(String token) {
+    // Idempotent init (avoid reopening streams on rebuild)
+    if (_token == token && _pollTimer != null) {
+      return;
+    }
+
+    _stopPolling();
     _token = token;
+    _isLoading = true;
+    _error = null;
+    _failureCount = 0;
+    _pollStopwatch.reset();
+    notifyListeners();
+
+    // Fetch initial status
     fetchStatus();
-    // Poll every 2 seconds for updates (simple alternative to SSE for now)
-    _pollTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => fetchStatus(),
-    );
+
+    // Start polling every 2 seconds
+    _startPolling();
+
+    // Local UI tick (1 second): keeps timers updating smoothly between polls
+    _uiTickTimer?.cancel();
+    _uiTickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      // Only tick UI if connected - stops stale timer display when offline
+      if (_status != null && _error == null) notifyListeners();
+    });
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _stopPolling();
     super.dispose();
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+
+    _uiTickTimer?.cancel();
+    _uiTickTimer = null;
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => fetchStatus(),
+    );
   }
 
   Future<void> fetchStatus() async {
@@ -41,14 +93,24 @@ class StatusProvider with ChangeNotifier {
 
     try {
       final newStatus = await _api.getStatus(_token!);
+
+      // Reset stopwatch on each successful poll - used for timer calculation
+      // Stopwatch uses monotonic time (system uptime), immune to clock changes
+      _pollStopwatch.reset();
+      _pollStopwatch.start();
+
       _status = newStatus;
-      _error = null; // Clear error on success
+      _error = null;
+      _failureCount = 0; // Reset on success
     } catch (e) {
+      _failureCount++;
       if (kDebugMode) {
-        print("Error fetching status: $e");
+        print("Error fetching status (attempt $_failureCount): $e");
       }
-      // Don't overwrite _status with null on transient errors, just set error flag
-      // _error = e.toString();
+      // After 3 consecutive failures (6 seconds), mark as offline
+      if (_failureCount >= _maxFailuresBeforeOffline) {
+        _error = 'Connection lost';
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

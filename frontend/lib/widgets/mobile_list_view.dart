@@ -5,8 +5,13 @@ import '../models/kiosk_status.dart';
 
 class MobileListView extends StatelessWidget {
   final KioskStatus status;
+  final int Function() getLocalSecondsSincePoll; // Getter for fresh time
 
-  const MobileListView({super.key, required this.status});
+  const MobileListView({
+    super.key,
+    required this.status,
+    required this.getLocalSecondsSincePoll,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +56,9 @@ class MobileListView extends StatelessWidget {
                           ),
                         ),
                         trailing: Text(
-                          session.timerText,
+                          session.getCurrentTimerText(
+                            getLocalSecondsSincePoll(),
+                          ),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -66,7 +73,7 @@ class MobileListView extends StatelessWidget {
                     )
                     .shimmer(
                       duration: 2.seconds,
-                      color: Colors.white.withOpacity(0.1),
+                      color: Colors.white.withValues(alpha: 0.1),
                     );
               }),
             ] else ...[
@@ -75,9 +82,11 @@ class MobileListView extends StatelessWidget {
                 padding: const EdgeInsets.all(32),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: const Column(
                   children: [
@@ -114,7 +123,9 @@ class MobileListView extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.orange.withOpacity(0.5)),
+                    side: BorderSide(
+                      color: Colors.orange.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: ListTile(
                     leading: Container(

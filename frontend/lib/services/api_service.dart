@@ -94,8 +94,9 @@ class ApiService {
       body: json.encode(settings),
     );
     if (response.statusCode == 401) throw Exception('Unauthorized');
-    if (response.statusCode != 200)
+    if (response.statusCode != 200) {
       throw Exception('Failed to update settings');
+    }
   }
 
   Future<void> updateSlug(String slug) async {
@@ -162,6 +163,26 @@ class ApiService {
     throw Exception('Failed to fetch roster');
   }
 
+  Future<void> addStudent(String name, String studentId) async {
+    final uri = _getUri('/api/roster/add');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'name': name, 'student_id': studentId}),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode == 409)
+      throw Exception('Student ID already exists');
+    if (response.statusCode != 200) throw Exception('Failed to add student');
+  }
+
+  Future<void> deleteStudent(int id) async {
+    final uri = _getUri('/api/roster/$id');
+    final response = await http.delete(uri);
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200) throw Exception('Failed to delete student');
+  }
+
   Future<void> joinQueue(String code, String token) async {
     final uri = _getUri('/api/queue/join');
     final response = await http.post(
@@ -205,6 +226,17 @@ class ApiService {
     }
   }
 
+  Future<void> reorderQueue(List<String> studentIds) async {
+    final uri = _getUri('/api/queue/reorder');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'student_ids': studentIds}),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200) throw Exception('Failed to reorder queue');
+  }
+
   Future<void> toggleBan(String nameHash, bool banned) async {
     final uri = _getUri('/api/roster/ban');
     final response = await http.post(
@@ -217,11 +249,11 @@ class ApiService {
   }
 
   Future<void> clearRoster({bool clearHistory = false}) async {
-    final uri = _getUri('/api/roster/clear');
+    final uri = _getUri('/api/admin/reset');
     final response = await http.post(
       uri,
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'clear_history': clearHistory}),
+      body: json.encode({'clear_roster': true, 'clear_sessions': clearHistory}),
     );
     if (response.statusCode == 401) throw Exception('Unauthorized');
     if (response.statusCode != 200) throw Exception('Failed to clear roster');
@@ -239,10 +271,36 @@ class ApiService {
   }
 
   Future<void> deleteHistory() async {
-    final uri = _getUri('/api/control/delete_history');
-    final response = await http.post(uri);
+    final uri = _getUri('/api/admin/reset');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'clear_sessions': true, 'clear_roster': false}),
+    );
     if (response.statusCode == 401) throw Exception('Unauthorized');
     if (response.statusCode != 200) throw Exception('Failed to delete history');
+  }
+
+  Future<void> endSession(int sessionId) async {
+    final uri = _getUri('/api/admin/end_session');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'session_id': sessionId}),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200) throw Exception('Failed to end session');
+  }
+
+  Future<void> banStudent(String studentId) async {
+    final uri = _getUri('/api/ban_student');
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'student_id': studentId}),
+    );
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode != 200) throw Exception('Failed to ban student');
   }
 
   // --- DEV API ---
@@ -268,5 +326,19 @@ class ApiService {
     if (response.statusCode == 401) throw Exception('Unauthorized');
     if (response.statusCode == 200) return json.decode(response.body);
     throw Exception('Failed to load dev stats: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> getExpandedDevStats() async {
+    final uri = _getUri('/api/dev/expanded_stats');
+    // POST request with empty body (cookie-based auth)
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({}),
+    );
+
+    if (response.statusCode == 401) throw Exception('Unauthorized');
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Failed to load expanded stats: ${response.statusCode}');
   }
 }

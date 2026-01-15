@@ -7,10 +7,13 @@ import 'bubble_widget.dart';
 class PhysicsLayout extends StatefulWidget {
   final KioskStatus status;
   final bool isDisplay;
+  final int Function()
+  getLocalSecondsSincePoll; // Getter for fresh time on each frame
 
   const PhysicsLayout({
     super.key,
     required this.status,
+    required this.getLocalSecondsSincePoll,
     this.isDisplay = false,
   });
 
@@ -39,9 +42,12 @@ class _PhysicsLayoutState extends State<PhysicsLayout>
   @override
   void didUpdateWidget(PhysicsLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Re-sync when status changes
     if (widget.status != oldWidget.status) {
       _bubbleSystem.sync(status: widget.status);
     }
+    // Update timers on every rebuild (1 second from UI tick) - handles throttled tabs
+    _bubbleSystem.updateTimersOnly(widget.getLocalSecondsSincePoll());
   }
 
   @override
@@ -61,8 +67,11 @@ class _PhysicsLayoutState extends State<PhysicsLayout>
     // Cap dt to prevent huge jumps if tab was backgrounded
     if (dt > 0.05) dt = 0.05;
 
-    // Update Physics
-    _bubbleSystem.update(dt);
+    // Update Physics with fresh time getter (smooth per-frame timer updates)
+    _bubbleSystem.update(
+      dt,
+      getLocalSecondsSincePoll: widget.getLocalSecondsSincePoll,
+    );
 
     // Trigger rebuild to paint new positions
     setState(() {});
@@ -150,7 +159,7 @@ class _PhysicsLayoutState extends State<PhysicsLayout>
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ],
           );
         },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/app_nav_drawer.dart';
 
 class DevScreen extends StatefulWidget {
   const DevScreen({super.key});
@@ -26,7 +27,7 @@ class _DevScreenState extends State<DevScreen> {
 
   Future<void> _checkAuth() async {
     try {
-      final stats = await _api.getDevStats();
+      final stats = await _api.getExpandedDevStats();
       if (mounted) {
         setState(() {
           _stats = stats;
@@ -114,14 +115,25 @@ class _DevScreenState extends State<DevScreen> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
+      drawer: const AppNavDrawer(currentRoute: '/dev'),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          _buildStatRow("Total Sessions", _stats?['total_sessions']),
-          _buildStatRow("Active Sessions", _stats?['active_sessions']),
-          const Divider(),
-          _buildStatRow("Total Students", _stats?['total_students']),
-          _buildStatRow("Total Users", _stats?['total_users']),
+          _buildGlobalStats(),
+          const SizedBox(height: 32),
+          const Text(
+            "Active Teachers",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          _buildTeachersList(),
+          const SizedBox(height: 32),
+          const Text(
+            "System Activity (Anonymized)",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          _buildActivityFeed(),
           const SizedBox(height: 32),
           const Text(
             "Database Actions",
@@ -148,6 +160,96 @@ class _DevScreenState extends State<DevScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGlobalStats() {
+    final g = _stats?['global_stats'] ?? {};
+    return Card(
+      elevation: 0,
+      color: Colors.blue[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildStatRow("Total Sessions", g['total_sessions']),
+            _buildStatRow("Active Sessions", g['active_sessions']),
+            const Divider(),
+            _buildStatRow("Total Students", g['total_students']),
+            _buildStatRow("Total Users", g['total_users']),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeachersList() {
+    final teachers = List<Map<String, dynamic>>.from(_stats?['teachers'] ?? []);
+    if (teachers.isEmpty) return const Text("No active teachers found.");
+
+    return Card(
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: teachers.length,
+        separatorBuilder: (c, i) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final t = teachers[index];
+          final isActive = (t['active_sessions'] ?? 0) > 0;
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: isActive ? Colors.green : Colors.grey[300],
+              child: Icon(
+                Icons.person,
+                color: isActive ? Colors.white : Colors.grey,
+              ),
+            ),
+            title: Text(t['email'] ?? "Unknown"),
+            subtitle: Text("Last Active: ${t['last_login'] ?? 'Never'}"),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  "${t['active_sessions']} Active",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isActive ? Colors.green[700] : Colors.grey,
+                  ),
+                ),
+                Text(
+                  "${t['total_sessions']} Total Sessions",
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildActivityFeed() {
+    final activity = List<Map<String, dynamic>>.from(_stats?['activity'] ?? []);
+    if (activity.isEmpty) return const Text("No recent activity.");
+
+    return Card(
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: activity.length,
+        separatorBuilder: (c, i) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final a = activity[index];
+          return ListTile(
+            dense: true,
+            leading: const Icon(Icons.history, size: 16),
+            title: Text("${a['action']} - ${a['teacher']}"),
+            subtitle: Text(a['timestamp']?.toString().split('.').first ?? ""),
+            trailing: Text(a['duration'] ?? ""),
+          );
+        },
       ),
     );
   }

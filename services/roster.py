@@ -156,7 +156,7 @@ class RosterService:
         
         return fallback
     
-    def clear_all_student_names(self, user_id: Optional[int]) -> None:
+    def clear_all_student_names(self, user_id: Optional[int]) -> bool:
         """Clear all student names from database (scoped to user if set)"""
         try:
             if user_id is not None:
@@ -167,8 +167,10 @@ class RosterService:
             
             # Also clear cache
             self.clear_memory_roster(user_id)
+            return True
         except Exception:
             self.db.session.rollback()
+            return False
     
     def get_all_students(self, user_id: Optional[int]) -> list:
         """Get all students for the current user (for admin display)"""

@@ -65,9 +65,20 @@ The application uses **Material 3 Expressive** principles with a custom color pa
 1.  Fork this repo.
 2.  Create a **Web Service** on Render (Python 3).
 3.  **Build Command**: `pip install -r requirements.txt`
-4.  **Start Command**: `gunicorn app:app`
+4.  **Start Command** (SSE-enabled): `gunicorn -k gevent --worker-connections 1000 --timeout 0 app:app`
+    - Notes:
+      - SSE holds connections open; a gevent worker prevents each client from consuming a full sync worker.
+      - If you prefer sync workers, SSE can still work for small deployments, but each connected client consumes a worker.
 5.  Set your Environment Variables in the dashboard.
 6.  Add a **PostgreSQL** database (optional but recommended for persistence).
+
+### Important: Updating the Flutter UI in production
+Render is running the **Flask app** and serving the prebuilt Flutter web assets from `static/`. It does **not** build Flutter for you.
+
+When you change anything under `frontend/lib/`, you must:
+- run `./deploy.sh` locally (builds Flutter web + copies `frontend/build/web/*` into `static/`)
+- commit the updated `static/` files
+- push to your repo so Render redeploys with the new UI bundle
 
 ## Admin Manual
 

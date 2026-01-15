@@ -38,6 +38,42 @@ class _DisplayScreenState extends State<DisplayScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
+              // Show offline error overlay when connection is lost
+              if (!provider.isConnected) {
+                return Container(
+                  color: Colors.grey[900],
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.cloud_off,
+                          size: 80,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          "Connection Lost",
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Reconnecting...",
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
               final status = provider.status;
               if (status == null) {
                 return const Center(
@@ -50,13 +86,22 @@ class _DisplayScreenState extends State<DisplayScreen> {
 
               // MOBILE VIEW
               if (isSmallScreen) {
-                return MobileListView(status: status);
+                return MobileListView(
+                  status: status,
+                  getLocalSecondsSincePoll: () =>
+                      provider.localSecondsSincePoll,
+                );
               }
 
               return Stack(
                 children: [
                   // Rendering Physics Layout in DISPLAY MODE (Big Text, No Inputs)
-                  PhysicsLayout(status: status, isDisplay: true),
+                  PhysicsLayout(
+                    status: status,
+                    isDisplay: true,
+                    getLocalSecondsSincePoll: () =>
+                        provider.localSecondsSincePoll,
+                  ),
 
                   // Waitlist Overlay (Parity with Kiosk)
                   if (status.queue.isNotEmpty)
@@ -68,7 +113,7 @@ class _DisplayScreenState extends State<DisplayScreen> {
                       left: isSmallScreen ? 16 : null,
                       child: Card(
                         elevation: 8,
-                        shadowColor: Colors.orange.withOpacity(0.5),
+                        shadowColor: Colors.orange.withValues(alpha: 0.5),
                         color: Colors.grey[900],
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -133,13 +178,15 @@ class _DisplayScreenState extends State<DisplayScreen> {
                                         ),
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.05),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.05,
+                                          ),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
                                           border: Border.all(
-                                            color: Colors.white.withOpacity(
-                                              0.1,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.1,
                                             ),
                                           ),
                                         ),

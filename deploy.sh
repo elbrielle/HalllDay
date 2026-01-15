@@ -4,7 +4,7 @@
 echo "🚧 Building Flutter Web App..."
 cd frontend
 # Using standard build, auto-detects best renderer
-/Users/elishalucero/HalllDay_Antigravity/flutter/bin/flutter build web
+flutter build web
 
 if [ $? -eq 0 ]; then
     echo "✅ Build Successful."
