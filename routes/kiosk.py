@@ -177,23 +177,36 @@ def api_scan():
     token = payload.get("token")
     user_id = get_current_user_id(token)
 
-    # Check if kiosk is available (manual suspend + schedule)
-    settings = get_settings(user_id)
-    available, reason = is_schedule_available(user_id, settings)
-    if not available:
-        # Allow queue while suspended if enabled
-        if settings.get('allow_queue_while_suspended') and settings.get('enable_queue'):
-            # Will handle queue join below, but block immediate pass
-            pass
-        else:
-            if reason == "Manually suspended":
-                return jsonify(ok=False, message="Kiosk is currently suspended by administrator"), 403
-            else:
-                return jsonify(ok=False, message=f"Passes not available: {reason}"), 403
-    
     code = (payload.get("code") or "").strip()
     if not code:
         return jsonify(ok=False, message="No code scanned"), 400
+
+    # Look up returning students first (allow return even if suspended)
+    open_sessions = get_open_sessions(user_id)
+    is_returning = False
+    
+    # Check if this student currently holds a pass
+    for s in open_sessions:
+        if s.student_id == code:
+             is_returning = True
+             break
+    
+    # If NEW pass (not returning), apply suspension/schedule rules
+    if not is_returning:
+        # Check if kiosk is available (manual suspend + schedule)
+        settings = get_settings(user_id)
+        available, reason = is_schedule_available(user_id, settings)
+        
+        if not available:
+            # Allow queue while suspended if enabled
+            if settings.get('allow_queue_while_suspended') and settings.get('enable_queue'):
+                # Will handle queue join below, but block immediate pass
+                pass
+            else:
+                if reason == "Manually suspended":
+                    return jsonify(ok=False, message="Kiosk is currently suspended by administrator"), 403
+                else:
+                    return jsonify(ok=False, message=f"Passes not available: {reason}"), 403
 
     # Look up student name from encrypted database
     student_name = get_student_name(code, user_id=user_id)
@@ -205,13 +218,17 @@ def api_scan():
         else:
             return jsonify(ok=False, message=f"Incorrect ID: {code}"), 404
     
-    # Ensure minimal Student record exists for foreign key constraint
+    # Ensure minimal Student record exists
     if not Student.query.get(code):
         anonymous_student = Student(id=code, name=f"Anonymous_{code}", user_id=user_id)
         db.session.add(anonymous_student)
         db.session.commit()
+    
+    # Reload settings for subsequent logic (capacity checks etc)
+    if is_returning:
+        settings = get_settings(user_id)
 
-    open_sessions = get_open_sessions(user_id)
+    # ... logic continues (return check is repeated but that's fine/safe)
 
     # If this student currently holds the pass, end their session
     for s in open_sessions:

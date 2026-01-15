@@ -159,26 +159,19 @@ class BubbleSystem {
   }
 
   void sync({required KioskStatus status}) {
-    if (status.kioskSuspended) {
-      ensureBubbleCount(1);
-      bubbles[0].settarget(
-        x: 50,
-        y: 50,
-        scale: 1.0,
-        newType: BubbleType.suspended,
-      );
-      return;
-    }
-
     final int usedCount = status.activeSessions.length;
-    final bool showAvailable = usedCount < status.capacity;
-    final int totalBubbles = usedCount + (showAvailable ? 1 : 0);
+    final bool isSuspended = status.kioskSuspended;
+
+    // Show a slot if suspended (to show "Suspended") OR if capacity available (to show "Available")
+    final bool showSlot = isSuspended || (usedCount < status.capacity);
+
+    final int totalBubbles = usedCount + (showSlot ? 1 : 0);
 
     ensureBubbleCount(totalBubbles);
 
     final List<Map<String, double>> layout = getLayout(totalBubbles);
 
-    // Sync Used Sessions (timer handled in update loop with fresh time)
+    // Sync Used Sessions
     for (int i = 0; i < usedCount; i++) {
       final pos = layout[i];
       bubbles[i].settarget(
@@ -190,15 +183,19 @@ class BubbleSystem {
       );
     }
 
-    // Sync Available Bubble (if exists)
-    if (showAvailable) {
+    // Sync "Slot" Bubble (Last one) - either Available or Suspended
+    if (showSlot) {
       final int idx = usedCount;
       final pos = layout[idx];
+
       bubbles[idx].settarget(
         x: pos['x']!,
         y: pos['y']!,
         scale: pos['scale']!,
-        newType: BubbleType.available,
+        newType: isSuspended
+            ? BubbleType.suspended
+            : BubbleType.available, // Show Suspended state if banned
+        sessionData: null,
       );
     }
   }
